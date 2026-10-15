@@ -292,3 +292,68 @@ ON CONFLICT (id) DO UPDATE SET public = false;
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('private-inspector-docs', 'private-inspector-docs', false)
 ON CONFLICT (id) DO UPDATE SET public = false;
+
+-- د) سياسات التخزين (Storage Objects Policies)
+DROP POLICY IF EXISTS "Public read lesson media" ON storage.objects;
+CREATE POLICY "Public read lesson media" ON storage.objects
+  FOR SELECT USING (bucket_id = 'public-lesson-media');
+
+DROP POLICY IF EXISTS "Authenticated upload lesson media" ON storage.objects;
+CREATE POLICY "Authenticated upload lesson media" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'public-lesson-media');
+
+DROP POLICY IF EXISTS "Teacher and Inspector read private notes" ON storage.objects;
+CREATE POLICY "Teacher and Inspector read private notes" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (bucket_id = 'private-pedagogical-notes');
+
+DROP POLICY IF EXISTS "Teacher upload private notes" ON storage.objects;
+CREATE POLICY "Teacher upload private notes" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'private-pedagogical-notes');
+
+-- ====================================================================
+-- المحفز التلقائي لإنشاء الملف الشخصي عند التسجيل (Auto Profile Trigger)
+-- ====================================================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (
+    id,
+    role,
+    full_name,
+    phone,
+    district_id,
+    middle_school_id,
+    school_custom_name,
+    teacher_code,
+    slug,
+    levels_taught
+  )
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'role', 'teacher'),
+    COALESCE(NEW.raw_user_meta_data->>'full_name', 'أستاذ جديد'),
+    NEW.raw_user_meta_data->>'phone',
+    NULLIF(NEW.raw_user_meta_data->>'district_id', '')::INTEGER,
+    CASE 
+      WHEN NEW.raw_user_meta_data->>'middle_school_id' IS NOT NULL AND NEW.raw_user_meta_data->>'middle_school_id' <> '' 
+      THEN (NEW.raw_user_meta_data->>'middle_school_id')::UUID 
+      ELSE NULL 
+    END,
+    NEW.raw_user_meta_data->>'school_custom_name',
+    COALESCE(NEW.raw_user_meta_data->>'teacher_code', 'MTH-' || UPPER(SUBSTRING(NEW.id::text, 1, 4))),
+    COALESCE(NEW.raw_user_meta_data->>'slug', 'prof-' || SUBSTRING(NEW.id::text, 1, 6)),
+    ARRAY[1, 2, 3, 4]::SMALLINT[]
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
