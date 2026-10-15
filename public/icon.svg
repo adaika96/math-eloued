@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="45%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#064e3b"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle Background -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgGrad)" filter="url(#shadow)"/>
+  <rect x="22" y="22" width="468" height="468" rx="106" fill="none" stroke="url(#goldGrad)" stroke-width="8" opacity="0.85"/>
+
+  <!-- Math Geometry Grid Accents -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="6,8" opacity="0.2"/>
+  <circle cx="256" cy="256" r="120" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.15"/>
+
+  <!-- Center Sigma Symbol ∑ -->
+  <text x="256" y="310" 
+        font-family="system-ui, -apple-system, 'Segoe UI', Arial, sans-serif" 
+        font-size="250" 
+        font-weight="900" 
+        fill="#ffffff" 
+        text-anchor="middle"
+        filter="url(#shadow)">∑</text>
+
+  <!-- Subtitle Text -->
+  <text x="256" y="420" 
+        font-family="system-ui, -apple-system, 'Segoe UI', Arial, sans-serif" 
+        font-size="36" 
+        font-weight="800" 
+        fill="#a7f3d0" 
+        letter-spacing="4"
+        text-anchor="middle">مـادة الـريـاضـيـات</text>
+
+  <!-- Small badge for Prof Adaika -->
+  <rect x="166" y="442" width="180" height="26" rx="13" fill="#ffffff" fill-opacity="0.18"/>
+  <text x="256" y="460" 
+        font-family="system-ui, -apple-system, 'Segoe UI', Arial, sans-serif" 
+        font-size="14" 
+        font-weight="700" 
+        fill="#ffffff" 
+        text-anchor="middle">أ. محمد عدايكة</text>
+</svg>

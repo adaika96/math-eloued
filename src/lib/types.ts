@@ -1,0 +1,290 @@
+export type NotebookType = "lessons" | "directed_work" | "worksheets" | "summaries";
+
+export type LessonImage = {
+  id: string;
+  url: string;
+  downloadUrl?: string;
+  name: string;
+  createdAt: string;
+  fileType?: "image" | "pdf";
+};
+
+export function isPdfFile(item?: { url?: string; name?: string; fileType?: string } | null): boolean {
+  if (!item) return false;
+  if (item.fileType === "pdf") return true;
+  const name = (item.name || "").toLowerCase();
+  const url = (item.url || "").toLowerCase();
+  return name.endsWith(".pdf") || url.endsWith(".pdf") || url.includes(".pdf?") || url.includes("/pdf");
+}
+
+
+export type Lesson = {
+  id: string;
+  teacherId?: string; // معرف الأستاذ صاحب الدرس في المنصة الولائية
+  level: 1 | 2 | 3 | 4; // 1 = أولى متوسط ، 2 = ثانية متوسط ، 3 = ثالثة متوسط ، 4 = رابعة متوسط
+  type?: NotebookType; // "lessons" (كراس الدروس) | "directed_work" (كراس الأعمال الموجهة) | "worksheets" (سلاسل التمارين) | "summaries" (الملخصات والمطويات)
+  field?: string; // الميدان : مثلاً "أنشطة عددية" ، "أنشطة هندسية" ، "تنظيم معطيات"
+  section?: string; // المقطع المعرفي : مثلاً "المقطع 1 : الأعداد الطبيعية والأعداد العشرية"
+  number: number; // رقم المورد المعرفي أو رقم حصة الأعمال الموجهة أو رقم السلسلة
+  title: string; // عنوان المورد / الدرس / الحصة / السلسلة / الملخص
+  notes?: string; // ملاحظات وتوجيهات الأستاذ
+  createdAt: string;
+  images: LessonImage[];
+  homeworkImages?: LessonImage[]; // صور الحل النموذجي للواجب المنزلي
+  homeworkNotes?: string; // ملاحظات أو رقم تمارين الواجب المنزلي
+};
+
+export type ParentSummons = {
+  id: string;
+  studentName: string; // اسم التلميذ
+  className: string; // الفوج : مثلاً "1م3"
+  notes?: string; // ملاحظة وتوجيه الأستاذ لولي الأمر
+  isUrgent?: boolean; // توقيت إضافي: الأحد صباحاً
+  createdAt: string;
+};
+
+export type HonorStudent = {
+  id: string;
+  studentName: string; // اسم التلميذ
+  className: string; // القسم : "1 م 1" ، "1 م 2" ، "1 م 3" ، "2 م 3"
+  notes?: string; // ملاحظة غير ضرورية (تميز في الفرض، كراس منظم، مواظبة...)
+  badge?: string; // لقب تشجيعي اختياري (مثلاً: نجم الرياضيات ⭐، كراس نموذجي 📖)
+  createdAt: string;
+};
+
+export const HONOR_CLASSES = ["1 م 1", "1 م 2", "1 م 3", "2 م 3"] as const;
+export type HonorClass = (typeof HONOR_CLASSES)[number];
+
+export type Penalty = {
+  id: string;
+  studentName: string; // اسم التلميذ
+  className: string; // القسم : "1 م 1" ، "1 م 2" ، "1 م 3" ، "2 م 3"
+  deduction: string; // مقدار الخصم أو العقوبة : مثلاً "ناقص 3 في التقويم المستمر (-3)"
+  reason: string; // سبب العقوبة : مثلاً "هروب من الحصة يوم الثلاثاء"
+  date?: string; // تاريخ الحادثة أو الخصم
+  notes?: string; // ملاحظات أو توجيه إضافي من الأستاذ
+  createdAt: string;
+};
+
+export type EvaluationRating = "excellent" | "very_good" | "good" | "medium" | "weak";
+// التقييم اللفظي والألوان:
+// ممتاز (أخضر داكن 🟢) = 18-20
+// جيد جداً (أخضر 🟢) = 15-17
+// جيد (أزرق/سماوي 🔵) = 12-14
+// متوسط (برتقالي 🟡) = 10-11
+// ضعيف (أحمر 🔴) = أقل من 10
+
+export type StudentEvaluation = {
+  id: string;
+  studentName: string; // اسم التلميذ
+  className: string; // القسم : "1 م 1" ، "1 م 2" ، "1 م 3" ، "2 م 3"
+  groupName: "فوج 1" | "فوج 2" | "القسم كامل"; // الفوج في حصة التفويج (أعمال موجهة)
+  // 1. كراس الدروس والأعمال الموجهة (5 نقاط)
+  notebookScore: number; // 0 إلى 5
+  notebookComplete?: boolean; // كراس كامل دون نقص دروس
+  // 2. الواجبات المنزلية (5 نقاط)
+  homeworkScore: number; // 0 إلى 5
+  homeworkDone?: boolean; // واجب كراس المحاولات منجز
+  // 3. السلوك والانضباط وإحضار الأدوات والكتاب (5 نقاط)
+  toolsScore: number; // 0 إلى 5
+  hasTools?: boolean; // إحضار الأدوات الهندسية والكتاب
+  // 4. حل النشاط والمشاركة الفعالة (5 نقاط)
+  activityScore: number; // 0 إلى 5
+  // المجموع الإجمالي التلقائي من 20
+  totalScore: number; // 0 إلى 20
+  rating: EvaluationRating; // التقدير اللفظي
+  ratingColor: "green" | "emerald" | "amber" | "rose"; // شارة اللون السريعة
+  notes?: string; // ملاحظة الأستاذ (مثلاً: استدراك درس سابق، كراس نموذجي...)
+  updatedAt: string;
+};
+
+export type InspectionRecord = {
+  studentName: string;
+  lessonsDone: number; // عدد الدروس المكتوبة (مثلاً 8 من 8)
+  homeworksDone: number; // عدد الواجبات المنجزة (مثلاً 8 من 8)
+  behaviorScore: number; // علامة السلوك والأدوات (من 5)
+  activityScore: number; // علامة حل النشاط والمشاركة (من 5)
+  score: number; // علامة هذه المراقبة من 20 (تحسب تلقائياً)
+  notes?: string; // ملاحظة سريعة للتلميذ
+};
+
+export type InspectionSession = {
+  id: string;
+  sessionNumber: number; // 1, 2, 3...
+  title?: string; // مثلاً: المراقبة الأولى (الدروس 1 إلى 8)
+  date: string; // اليوم والتاريخ : مثلاً "الأربعاء 09 أكتوبر 2026"
+  className: string; // القسم : "1 م 1" ، "1 م 2" ، "1 م 3" ، "2 م 3"
+  groupName: "فوج 1" | "فوج 2" | "القسم كامل"; // الفوج المعني
+  lessonRange: string; // مجال الدروس: مثلاً "الدروس من 1 إلى 8"
+  totalLessons: number; // عدد الدروس المقررة للمراقبة (مثلاً 8)
+  totalHomeworks: number; // عدد الواجبات المقررة للمراقبة (مثلاً 8)
+  records: Record<string, InspectionRecord>; // سجلات التلاميذ (مفتاحها اسم التلميذ)
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StudentRosterItem = {
+  id: string;
+  studentName: string;
+  className: string;
+  groupName: "فوج 1" | "فوج 2" | "القسم كامل";
+};
+
+export type AnnouncementCategory = "absence" | "lesson" | "update" | "general" | "urgent";
+
+export type Announcement = {
+  id: string;
+  title: string; // عنوان الإعلان (مثلاً: تنبيه غياب، رفع حل واجب، ملاحظة...)
+  content: string; // نص الإعلان والتفاصيل
+  category: AnnouncementCategory; // نوع الإعلان (absence: غياب، lesson: دروس/واجبات، update: تحديث، general: عام، urgent: عاجل)
+  date: string; // تاريخ الإعلان أو اليوم المعني
+  pinned?: boolean; // هل الإعلان مثبت في الأعلى
+  active?: boolean; // هل الإعلان ظاهر للزوار
+  createdAt: string;
+};
+
+export type MessageCategory = "question" | "suggestion" | "criticism" | "other";
+
+export type AnonymousMessage = {
+  id: string;
+  category: MessageCategory; // تصنيف الرسالة (سؤال ❓، اقتراح 💡، نقد بنّاء ⚖️، أخرى 💬)
+  targetLevel?: string; // اختياري: "1 متوسط" | "2 متوسط" | "ولي أمر" | "غير محدد"
+  content: string; // نص الرسالة بسرية تامة
+  createdAt: string;
+  read?: boolean; // هل تمت قراءتها من الأستاذ
+};
+
+export type LessonsData = {
+  lessons: Lesson[];
+  summons?: ParentSummons[];
+  honors?: HonorStudent[];
+  penalties?: Penalty[];
+  evaluations?: StudentEvaluation[];
+  inspectionSessions?: InspectionSession[];
+  studentRoster?: StudentRosterItem[];
+  announcements?: Announcement[];
+  anonymousMessages?: AnonymousMessage[];
+};
+
+export const LEVELS = {
+  1: { label: "السنة الأولى متوسط", short: "1 متوسط" },
+  2: { label: "السنة الثانية متوسط", short: "2 متوسط" },
+  3: { label: "السنة الثالثة متوسط", short: "3 متوسط" },
+  4: { label: "السنة الرابعة متوسط", short: "4 متوسط" },
+} as const;
+
+// ==========================================
+// نماذج المنصة الرقمية لولاية الوادي (Wilaya Types)
+// ==========================================
+
+export interface District {
+  id: number;
+  number: number; // 1 إلى 5
+  name: string; // مثال: المقاطعة التفتيشية الأولى (الوادي 1)
+  description?: string;
+  inspectorName?: string;
+}
+
+export interface MiddleSchool {
+  id: string;
+  districtId: number;
+  name: string;
+  commune: string;
+}
+
+export type UserRole = "teacher" | "inspector" | "admin";
+
+export interface UserProfile {
+  id: string;
+  role: UserRole;
+  fullName: string;
+  phone?: string;
+  districtId?: number;
+  middleSchoolId?: string;
+  schoolCustomName?: string;
+  teacherCode?: string;
+  slug?: string;
+  levelsTaught: (1 | 2 | 3 | 4)[];
+  avatarUrl?: string;
+  bio?: string;
+  isVerified: boolean;
+  createdAt: string;
+}
+
+export interface PedagogicalNote {
+  id: string;
+  teacherId: string;
+  districtId: number;
+  level: 1 | 2 | 3 | 4;
+  semester: 1 | 2 | 3;
+  lessonTitle: string;
+  filePath: string;
+  fileName: string;
+  teacherNotes?: string;
+  inspectorFeedback?: string;
+  reviewedAt?: string;
+  status: "submitted" | "reviewed" | "needs_revision";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InspectorCircular {
+  id: string;
+  inspectorId: string;
+  districtId: number;
+  targetSchoolId?: string;
+  targetTeacherId?: string;
+  title: string;
+  content: string;
+  attachmentPath?: string;
+  importance: "normal" | "urgent" | "seminar";
+  createdAt: string;
+  readCount?: number;
+}
+
+export const NOTEBOOKS = {
+  lessons: {
+    id: "lessons" as NotebookType,
+    title: "كراس الدروس",
+    subtitle: "192 صفحة • الميادين، المقاطع وحلول الواجبات",
+    short: "كراس الدروس",
+    icon: "📘",
+  },
+  directed_work: {
+    id: "directed_work" as NotebookType,
+    title: "الأعمال الموجهة",
+    subtitle: "96 صفحة • حصص التفويج وتطبيقات القسم",
+    short: "الأعمال الموجهة",
+    icon: "📗",
+  },
+  worksheets: {
+    id: "worksheets" as NotebookType,
+    title: "سلاسل التمارين",
+    subtitle: "سلاسل التمارين، الواجبات الورقية والحلول",
+    short: "سلاسل التمارين",
+    icon: "📑",
+  },
+  summaries: {
+    id: "summaries" as NotebookType,
+    title: "الملخصات والمطويات",
+    subtitle: "ملخصات القواعد، بطاقات القوانين ومراجعة الاختبارات",
+    short: "الملخصات",
+    icon: "📌",
+  },
+} as const;
+
+export const COMMON_FIELDS = [
+  "أنشطة عددية",
+  "أنشطة هندسية",
+  "تنظيم معطيات",
+] as const;
+
+export const RECEPTION_INFO = {
+  officialDay: "الأربعاء",
+  officialTime: "10:00 إلى 11:00 صباحاً",
+  extraDay: "الأحد",
+  extraTime: "08:00 إلى 09:00 صباحاً",
+  extraNote: "توقيت إضافي (مبادرة من الأستاذ لعدم الانتظار لأسبوع كامل) وليس ساعة استقبال رسمية",
+  location: "متوسطة المجاهد باهي علي",
+  motto: "أود استقبالكم الآن لمتابعة مستوى أبنائكم ومعالجة النقائص، وليس بعد الإعلان عن نتائج الفصل الأول!",
+} as const;

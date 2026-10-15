@@ -1,0 +1,64 @@
+{
+  "name": "دروس الرياضيات | الأستاذ محمد عدايكة",
+  "short_name": "رياضيات عدايكة",
+  "description": "منصة دروس مادة الرياضيات ودفتر التقييم الميداني السريع - متوسطة باهي علي",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#059669",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "التقويم الميداني للأستاذ",
+      "short_name": "التقويم السريع",
+      "description": "تفقد الكراريس والواجبات في القسم بدون إنترنت",
+      "url": "/eval",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "لوحة الإدارة ورفع الواجبات",
+      "short_name": "لوحة الإدارة",
+      "description": "إدارة الدروس وحلول الواجبات",
+      "url": "/admin",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
