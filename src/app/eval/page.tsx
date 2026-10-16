@@ -118,7 +118,7 @@ function FastLogin({ onLogin }: { onLogin: () => void }) {
         <input
           className="w-full text-center py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
           type="password"
-          placeholder="كلمة المرور (adaika2026)"
+          placeholder="كلمة المرور الخاصة بالأستاذ..."
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required

@@ -79,7 +79,7 @@ export function TeacherAccess() {
       <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-3 left-3 z-40 p-2.5 rounded-full bg-white/90 hover:bg-emerald-50 text-slate-400 hover:text-emerald-700 border border-slate-200/80 shadow-xs backdrop-blur-xs transition group"
-        title="دخول خاص بالأستاذ (adaika2026)"
+        title="دخول خاص بالأستاذ"
         aria-label="دخول الأستاذ"
       >
         <Lock className="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -115,7 +115,7 @@ export function TeacherAccess() {
                 <input
                   type="password"
                   className="w-full text-center py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="رمز الدخول (adaika2026)"
+                  placeholder="أدخل الرمز السري..."
                   value={inputCode}
                   onChange={(e) => setInputCode(e.target.value)}
                   dir="ltr"
