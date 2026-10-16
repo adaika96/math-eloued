@@ -13,6 +13,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { UserProfile, LEVELS } from "@/lib/types";
+import SaveToWalletButton from "@/components/SaveToWalletButton";
 
 interface TeacherPageProps {
   params: Promise<{
@@ -77,9 +78,17 @@ export default async function TeacherPublicSpace({ params }: TeacherPageProps) {
               <ArrowRight className="w-3.5 h-3.5" />
               العودة لبوابة ولاية الوادي
             </Link>
-            <span className="font-mono bg-white/15 px-2.5 py-0.5 rounded-md font-bold text-[11px]">
-              {profile.teacher_code || "MTH"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono bg-white/15 px-2.5 py-0.5 rounded-md font-bold text-[11px]">
+                {profile.teacher_code || "MTH"}
+              </span>
+              <SaveToWalletButton
+                slug={slug}
+                name={profile.full_name || ""}
+                code={profile.teacher_code || ""}
+                school={profile.school_custom_name || ""}
+              />
+            </div>
           </div>
 
           <div className="text-center space-y-2 pt-2">

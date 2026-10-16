@@ -12,6 +12,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import TeacherWallet from "@/components/TeacherWallet";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -110,6 +111,9 @@ export default async function WilayaHomePage() {
             </Link>
           </div>
         </div>
+
+        {/* محفظة الولي — تظهر فقط إذا كان للولي معلمون محفوظون */}
+        <TeacherWallet />
 
         {/* 3. مقاطعات ولاية الوادي التفتيشية الخمس */}
         <div className="space-y-4">
