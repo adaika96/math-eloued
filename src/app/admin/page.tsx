@@ -4020,6 +4020,8 @@ function LessonCard({
   showToast: (type: "success" | "error", text: string) => void;
 }) {
   const [uploading, setUploading] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const [previewImg, setPreviewImg] = useState<string | null>(null);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [isDeletingImg, setIsDeletingImg] = useState(false);
@@ -4033,44 +4035,51 @@ function LessonCard({
   const isLesson = !lesson.type || lesson.type === "lessons";
 
   const uploadFiles = async (files: FileList | null, isHomework: boolean = false) => {
-    if (!files?.length) return;
+    if (!files?.length || isUploading) return;
     const list = Array.from(files);
 
-    const preparedFiles: { file: File | Blob; name: string }[] = [];
-
-    for (let k = 0; k < list.length; k++) {
-      const file = list[k];
-      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-
-      setUploading(
-        isPdf
-          ? `جاري تجهيز مستند PDF "${file.name}" (${k + 1} من ${list.length})...`
-          : `جاري ضغط وتحسين الصورة ${k + 1} من ${list.length}...`
-      );
-
-      let fileToUpload: File | Blob = file;
-
-      // ضغط الصور فقط، أما ملفات PDF فترفع كما هي بجودتها الكاملة
-      if (!isPdf && (file.type.startsWith("image/") || /\.(jpe?g|png|webp)$/i.test(file.name))) {
-        try {
-          fileToUpload = await imageCompression(file, {
-            maxSizeMB: 0.8,
-            maxWidthOrHeight: 2000,
-            useWebWorker: true,
-            fileType: "image/jpeg",
-          });
-        } catch (compressErr) {
-          console.warn("Image compression skipped:", compressErr);
-          fileToUpload = file;
-        }
-      }
-
-      preparedFiles.push({ file: fileToUpload, name: file.name });
-    }
-
-    setUploading(`جاري رفع وحفظ ${preparedFiles.length} ملفات دفعة واحدة بالترتيب المحدد...`);
+    setIsUploading(true);
+    setUploadProgress(5);
+    if (!open) onToggle();
+    setCardTab(isHomework ? "homework" : "board");
 
     try {
+      const preparedFiles: { file: File | Blob; name: string }[] = [];
+
+      for (let k = 0; k < list.length; k++) {
+        const file = list[k];
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+        setUploadProgress(Math.min(22, Math.round(5 + ((k + 1) / list.length) * 15)));
+        setUploading(
+          isPdf
+            ? `جاري فحص وتجهيز مستند PDF "${file.name}"...`
+            : `جاري ضغط وتحسين الصورة ${k + 1} من ${list.length}...`
+        );
+
+        let fileToUpload: File | Blob = file;
+
+        // ضغط الصور فقط، أما ملفات PDF فترفع كما هي بجودتها الكاملة
+        if (!isPdf && (file.type.startsWith("image/") || /\.(jpe?g|png|webp)$/i.test(file.name))) {
+          try {
+            fileToUpload = await imageCompression(file, {
+              maxSizeMB: 0.8,
+              maxWidthOrHeight: 2000,
+              useWebWorker: true,
+              fileType: "image/jpeg",
+            });
+          } catch (compressErr) {
+            console.warn("Image compression skipped:", compressErr);
+            fileToUpload = file;
+          }
+        }
+
+        preparedFiles.push({ file: fileToUpload, name: file.name });
+      }
+
+      setUploadProgress(25);
+      setUploading(`قيد إرسال ${preparedFiles.length} ملفات إلى الخادم...`);
+
       const formData = new FormData();
       formData.append("lessonId", lesson.id);
       if (isHomework) formData.append("isHomework", "true");
@@ -4079,15 +4088,52 @@ function LessonCard({
         formData.append("files", item.file, item.name);
       }
 
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+      // رفع الملف مع تتبع نسبة التقدم عبر XMLHttpRequest
+      const uploadResult = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload");
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.min(94, Math.round(25 + (event.loaded / event.total) * 68));
+            setUploadProgress(percent);
+            setUploading(`قيد إرسال الملف إلى السحابة... (${percent}%)`);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch {
+              resolve({});
+            }
+          } else {
+            try {
+              const err = JSON.parse(xhr.responseText);
+              reject(new Error(err.error || `خطأ في الخادم (${xhr.status})`));
+            } catch {
+              reject(new Error(`خطأ في الخادم (${xhr.status})`));
+            }
+          }
+        };
+
+        xhr.onerror = () => reject(new Error("تعذر الاتصال بالخادم، يرجى التحقق من الإنترنت"));
+        xhr.ontimeout = () => reject(new Error("انتهت مهلة انتظار الخادم"));
+
+        xhr.send(formData);
       });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "فشل الرفع");
+      setUploadProgress(97);
+      setUploading("تم إرسال الملف! جاري الحفظ والتثبيت الفوري في الموقع...");
+
+      // تحديث الحالة محلياً وفورياً بمجرد استلام الرد من الخادم دون أي تأخير
+      if (uploadResult && uploadResult.lesson) {
+        onLessonUpdated(uploadResult.lesson);
       }
+
+      setUploadProgress(100);
+      setUploading("✓ اكتمل الرفع بنجاح!");
 
       showToast(
         "success",
@@ -4096,14 +4142,22 @@ function LessonCard({
           : `✓ تم رفع وحفظ ${preparedFiles.length} ملفات بنجاح إلى "${lesson.title}" 📁`
       );
 
-      // جلب الدرس المحدث وتحديث الحالة محلياً مباشرة
-      const lRes = await fetch(`/api/lessons/${lesson.id}?_t=${Date.now()}`, { cache: "no-store" });
-      const data = await lRes.json();
-      if (data.lesson) onLessonUpdated(data.lesson);
+      // تأكيد إضافي بجلب الدرس في الخلفية للتأكد من مزامنة كل شيء
+      fetch(`/api/lessons/${lesson.id}?_t=${Date.now()}`, { cache: "no-store" })
+        .then((res) => res.json())
+        .then((fresh) => {
+          if (fresh.lesson) onLessonUpdated(fresh.lesson);
+        })
+        .catch(() => {});
+
+      // إبقاء نسبة 100% لفترة قصيرة ليطمئن الأستاذ
+      await new Promise((resolve) => setTimeout(resolve, 800));
     } catch (e: any) {
       showToast("error", "فشل رفع الملفات: " + (e.message || "خطأ غير معروف"));
     } finally {
+      setIsUploading(false);
       setUploading("");
+      setUploadProgress(0);
     }
   };
 
@@ -4299,20 +4353,35 @@ function LessonCard({
           {(isLesson || isWorksheet) ? (
             <label
               onClick={(e) => {
+                if (isUploading) { e.preventDefault(); return; }
                 e.stopPropagation();
                 if (!open) onToggle();
                 setCardTab("homework");
               }}
-              className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 text-white transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95 shadow-2xs cursor-pointer"
+              className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shrink-0 shadow-2xs ${
+                isUploading
+                  ? "bg-slate-300 text-slate-500 cursor-not-allowed pointer-events-none"
+                  : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer active:scale-95"
+              }`}
               title="اضغط هنا فوراً لرفع صورة أو ملف PDF لحل الواجب لهذا الدرس من الهاتف أو الحاسوب"
             >
-              <FileText className="w-3.5 h-3.5 text-white" />
-              <span>{isWorksheet ? "📝 رفع الحل (صور/PDF)" : "📝 رفع حل الواجب (صور/PDF)"}</span>
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>قيد الرفع {uploadProgress}%</span>
+                </>
+              ) : (
+                <>
+                  <FileText className="w-3.5 h-3.5 text-white" />
+                  <span>{isWorksheet ? "📝 رفع الحل (صور/PDF)" : "📝 رفع حل الواجب (صور/PDF)"}</span>
+                </>
+              )}
               <input
                 type="file"
                 accept="image/*,application/pdf,.pdf"
                 multiple
                 hidden
+                disabled={isUploading}
                 onChange={(e) => {
                   uploadFiles(e.target.files, true);
                   e.target.value = "";
@@ -4322,20 +4391,35 @@ function LessonCard({
           ) : isSummary ? (
             <label
               onClick={(e) => {
+                if (isUploading) { e.preventDefault(); return; }
                 e.stopPropagation();
                 if (!open) onToggle();
                 setCardTab("board");
               }}
-              className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-700 text-white transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95 shadow-2xs cursor-pointer"
+              className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shrink-0 shadow-2xs ${
+                isUploading
+                  ? "bg-slate-300 text-slate-500 cursor-not-allowed pointer-events-none"
+                  : "bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-95"
+              }`}
               title="اضغط هنا لرفع صور أو ملفات PDF للملخص"
             >
-              <Upload className="w-3.5 h-3.5 text-white" />
-              <span>📌 رفع الملخص (صور/PDF)</span>
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>قيد الرفع {uploadProgress}%</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5 text-white" />
+                  <span>📌 رفع الملخص (صور/PDF)</span>
+                </>
+              )}
               <input
                 type="file"
                 accept="image/*,application/pdf,.pdf"
                 multiple
                 hidden
+                disabled={isUploading}
                 onChange={(e) => {
                   uploadFiles(e.target.files, false);
                   e.target.value = "";
@@ -4345,20 +4429,35 @@ function LessonCard({
           ) : (
             <label
               onClick={(e) => {
+                if (isUploading) { e.preventDefault(); return; }
                 e.stopPropagation();
                 if (!open) onToggle();
                 setCardTab("board");
               }}
-              className="flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-black bg-sky-600 hover:bg-sky-700 text-white transition flex items-center justify-center gap-1.5 shrink-0 active:scale-95 shadow-2xs cursor-pointer"
+              className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 shrink-0 shadow-2xs ${
+                isUploading
+                  ? "bg-slate-300 text-slate-500 cursor-not-allowed pointer-events-none"
+                  : "bg-sky-600 hover:bg-sky-700 text-white cursor-pointer active:scale-95"
+              }`}
               title="اضغط هنا لرفع صور الحصة أو ملفات PDF"
             >
-              <Upload className="w-3.5 h-3.5 text-white" />
-              <span>📁 رفع صور أو PDF</span>
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>قيد الرفع {uploadProgress}%</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-3.5 h-3.5 text-white" />
+                  <span>📁 رفع صور أو PDF</span>
+                </>
+              )}
               <input
                 type="file"
                 accept="image/*,application/pdf,.pdf"
                 multiple
                 hidden
+                disabled={isUploading}
                 onChange={(e) => {
                   uploadFiles(e.target.files, false);
                   e.target.value = "";
@@ -4390,6 +4489,38 @@ function LessonCard({
 
       {open && (
         <div className="border-t border-slate-100 p-3.5 space-y-3.5 bg-slate-50/50">
+          {/* شريط ومؤشر الرفع الحي فائق الوضوح */}
+          {isUploading && (
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border-2 border-emerald-500 rounded-2xl p-4 shadow-md space-y-2.5">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600 shrink-0" />
+                  <span className="text-emerald-950 font-black">{uploading || "قيد التحميل والرفع..."}</span>
+                </div>
+                <span className="font-mono text-emerald-700 font-black text-sm bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300 shadow-2xs shrink-0">
+                  {uploadProgress}%
+                </span>
+              </div>
+
+              {/* شريط التقدم الفعلي الملون */}
+              <div className="w-full bg-slate-200 rounded-full h-3.5 overflow-hidden p-0.5 border border-slate-300">
+                <div
+                  className="bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 h-full rounded-full transition-all duration-150 ease-out shadow-xs"
+                  style={{ width: `${Math.max(5, uploadProgress)}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] font-bold pt-0.5">
+                <span className="flex items-center gap-1 text-emerald-800">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  يرجى الانتظار ثوانٍ قليلة · تم إرسال الملف ولا داعي لتكرار الرفع
+                </span>
+                <span className="text-slate-500 font-medium">
+                  {uploadProgress >= 96 ? "جاري الحفظ النهائي..." : "جاري النقل للسحابة..."}
+                </span>
+              </div>
+            </div>
+          )}
           {lesson.notes && (
             <div className="bg-amber-50/80 p-2.5 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
               <span className="font-black text-[11px] flex items-center gap-1">
@@ -4586,14 +4717,16 @@ function LessonCard({
               )}
 
               <label
-                className={`w-full py-3 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer transition flex items-center justify-center gap-2 shadow-sm active:scale-95 ${
-                  uploading ? "opacity-70 pointer-events-none" : ""
+                className={`w-full py-3 px-3 rounded-xl text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-sm ${
+                  isUploading
+                    ? "bg-slate-400 cursor-not-allowed opacity-80 pointer-events-none"
+                    : "bg-blue-600 hover:bg-blue-700 cursor-pointer active:scale-95"
                 }`}
               >
-                {uploading ? (
+                {isUploading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>{uploading}</span>
+                    <span>⏳ قيد الرفع والمعالجة السحابية ({uploadProgress}%)... يرجى الانتظار</span>
                   </>
                 ) : (
                   <>
@@ -4610,6 +4743,7 @@ function LessonCard({
                   accept="image/*,application/pdf,.pdf"
                   multiple
                   hidden
+                  disabled={isUploading}
                   onChange={(e) => {
                     uploadFiles(e.target.files, true);
                     e.target.value = "";
@@ -4746,14 +4880,16 @@ function LessonCard({
               )}
 
               <label
-                className={`btn-primary w-full py-3 text-xs cursor-pointer shadow-sm ${
-                  uploading ? "opacity-70 pointer-events-none" : ""
+                className={`w-full py-3 px-3 rounded-xl text-white text-xs font-black transition flex items-center justify-center gap-2 shadow-sm ${
+                  isUploading
+                    ? "bg-slate-400 cursor-not-allowed opacity-80 pointer-events-none"
+                    : "btn-primary cursor-pointer active:scale-95"
                 }`}
               >
-                {uploading ? (
+                {isUploading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{uploading}</span>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>⏳ قيد الرفع والمعالجة السحابية ({uploadProgress}%)... يرجى الانتظار</span>
                   </>
                 ) : (
                   <>
@@ -4772,8 +4908,9 @@ function LessonCard({
                   accept="image/*,application/pdf,.pdf"
                   multiple
                   hidden
+                  disabled={isUploading}
                   onChange={(e) => {
-                    uploadFiles(e.target.files);
+                    uploadFiles(e.target.files, false);
                     e.target.value = "";
                   }}
                 />
