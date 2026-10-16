@@ -197,48 +197,73 @@ export type UserRole = "teacher" | "inspector" | "admin";
 export interface UserProfile {
   id: string;
   role: UserRole;
-  fullName: string;
+  full_name?: string;
+  fullName?: string;
   phone?: string;
+  district_id?: number;
   districtId?: number;
+  middle_school_id?: string;
   middleSchoolId?: string;
+  school_custom_name?: string;
   schoolCustomName?: string;
+  teacher_code?: string;
   teacherCode?: string;
   slug?: string;
-  levelsTaught: (1 | 2 | 3 | 4)[];
+  levels_taught?: (1 | 2 | 3 | 4)[];
+  levelsTaught?: (1 | 2 | 3 | 4)[];
+  avatar_url?: string;
   avatarUrl?: string;
   bio?: string;
-  isVerified: boolean;
-  createdAt: string;
+  is_verified?: boolean;
+  isVerified?: boolean;
+  created_at?: string;
+  createdAt?: string;
 }
 
 export interface PedagogicalNote {
   id: string;
-  teacherId: string;
-  districtId: number;
+  teacher_id?: string;
+  teacherId?: string;
+  district_id?: number;
+  districtId?: number;
   level: 1 | 2 | 3 | 4;
   semester: 1 | 2 | 3;
-  lessonTitle: string;
-  filePath: string;
-  fileName: string;
+  lesson_title?: string;
+  lessonTitle?: string;
+  file_path?: string;
+  filePath?: string;
+  file_name?: string;
+  fileName?: string;
+  teacher_notes?: string;
   teacherNotes?: string;
+  inspector_feedback?: string;
   inspectorFeedback?: string;
+  reviewed_at?: string;
   reviewedAt?: string;
   status: "submitted" | "reviewed" | "needs_revision";
-  createdAt: string;
-  updatedAt: string;
+  created_at?: string;
+  createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
 }
 
 export interface InspectorCircular {
   id: string;
-  inspectorId: string;
-  districtId: number;
+  inspector_id?: string;
+  inspectorId?: string;
+  district_id?: number;
+  districtId?: number;
+  target_school_id?: string;
   targetSchoolId?: string;
+  target_teacher_id?: string;
   targetTeacherId?: string;
   title: string;
   content: string;
+  attachment_path?: string;
   attachmentPath?: string;
   importance: "normal" | "urgent" | "seminar";
-  createdAt: string;
+  created_at?: string;
+  createdAt?: string;
   readCount?: number;
 }
 
