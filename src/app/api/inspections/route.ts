@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
+import { requireTeacher } from "@/lib/auth";
 import { InspectionSession, InspectionRecord, StudentRosterItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +29,8 @@ function calculateInspectionScore(
 
 // 1. جلب جلسات المراقبة وقائمة التلاميذ
 export async function GET(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const className = searchParams.get("class");
   const groupName = searchParams.get("group");
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   let sessions = data.inspectionSessions || [];
   let roster = data.studentRoster || [];
 
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       groupName: e.groupName,
     }));
     data.studentRoster = roster;
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
   }
 
   if (className && className !== "all") {
@@ -82,14 +82,14 @@ export async function GET(req: NextRequest) {
 
 // 2. إنشاء جلسة مراقبة جديدة أو استيراد قائمة تلاميذ
 export async function POST(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
   try {
     const body = await req.json();
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     if (!data.inspectionSessions) data.inspectionSessions = [];
     if (!data.studentRoster) data.studentRoster = [];
 
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      await saveLessonsData(data);
+      await saveLessonsData(ctx, data);
       return NextResponse.json({
         success: true,
         sessions: data.inspectionSessions,
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
       );
       if (target) {
         target.groupName = newGroup;
-        await saveLessonsData(data);
+        await saveLessonsData(ctx, data);
         return NextResponse.json({ success: true, item: target, roster: data.studentRoster });
       }
       return NextResponse.json({ error: "التلميذ غير موجود" }, { status: 404 });
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
           found.groupName = item.groupName;
         }
       }
-      await saveLessonsData(data);
+      await saveLessonsData(ctx, data);
       return NextResponse.json({ success: true, roster: data.studentRoster });
     }
 
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      await saveLessonsData(data);
+      await saveLessonsData(ctx, data);
       return NextResponse.json({ success: true, addedCount, roster: data.studentRoster });
     }
 
@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
     };
 
     data.inspectionSessions.push(newSession);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, session: newSession });
   } catch (err: any) {
@@ -275,8 +275,8 @@ export async function POST(req: NextRequest) {
 
 // 3. تحديث سجل تلميذ داخل جلسة مراقبة بنقرة واحدة في الحصة
 export async function PUT(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -288,7 +288,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "معرف الجلسة مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     if (!data.inspectionSessions) data.inspectionSessions = [];
 
     const session = data.inspectionSessions.find((s) => s.id === sessionId);
@@ -304,7 +304,7 @@ export async function PUT(req: NextRequest) {
       if (body.totalLessons !== undefined) session.totalLessons = Number(body.totalLessons);
       if (body.totalHomeworks !== undefined) session.totalHomeworks = Number(body.totalHomeworks);
       session.updatedAt = new Date().toISOString();
-      await saveLessonsData(data);
+      await saveLessonsData(ctx, data);
       return NextResponse.json({ success: true, session });
     }
 
@@ -355,7 +355,7 @@ export async function PUT(req: NextRequest) {
     session.records[studentName] = existingRec;
     session.updatedAt = new Date().toISOString();
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, session, record: existingRec });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "فشل تحديث التقييم" }, { status: 500 });
@@ -364,8 +364,8 @@ export async function PUT(req: NextRequest) {
 
 // 4. حذف جلسة أو حذف تلميذ من الفوج
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -374,14 +374,14 @@ export async function DELETE(req: NextRequest) {
   const studentName = searchParams.get("studentName");
   const className = searchParams.get("class");
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   if (!data.inspectionSessions) data.inspectionSessions = [];
   if (!data.studentRoster) data.studentRoster = [];
 
   // حذف جلسة مراقبة كاملة
   if (sessionId) {
     data.inspectionSessions = data.inspectionSessions.filter((s) => s.id !== sessionId);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, message: "تم حذف جلسة المراقبة" });
   }
 
@@ -400,7 +400,7 @@ export async function DELETE(req: NextRequest) {
         delete session.records[studentName];
       }
     }
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, message: `تم حذف التلميذ ${studentName}` });
   }
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useTeacherId, withTeacher, teacherHomeHref, useTeacherInfo, teacherLabel } from "@/lib/teacherParam";
 import {
   ArrowRight,
   Trophy,
@@ -17,6 +18,8 @@ import {
 import { HonorStudent, HONOR_CLASSES } from "@/lib/types";
 
 export default function HonorRollPage() {
+  const teacherId = useTeacherId();
+  const teacherInfo = useTeacherInfo(teacherId);
   const [honors, setHonors] = useState<HonorStudent[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -28,7 +31,7 @@ export default function HonorRollPage() {
 
   const fetchHonors = async () => {
     try {
-      const res = await fetch(`/api/honors?t=${Date.now()}`, {
+      const res = await fetch(withTeacher(`/api/honors?t=${Date.now()}`), {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
       });
@@ -67,7 +70,7 @@ export default function HonorRollPage() {
       {/* رأس الصفحة مع زر الرجوع */}
       <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs">
         <Link
-          href="/"
+          href={teacherHomeHref(teacherId)}
           className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95 transition shrink-0"
           aria-label="الرجوع"
         >
@@ -79,7 +82,7 @@ export default function HonorRollPage() {
             <span className="text-amber-500 text-sm">✨</span>
           </div>
           <p className="text-[11px] text-slate-500 font-bold truncate">
-            الأستاذ محمد عدايكة — متوسطة المجاهد باهي علي
+            {teacherLabel(teacherInfo)}
           </p>
         </div>
       </div>

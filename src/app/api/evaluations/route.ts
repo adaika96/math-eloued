@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
+import { requireTeacher } from "@/lib/auth";
 import { StudentEvaluation, EvaluationRating } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +20,8 @@ function calculateRating(totalScore: number): {
 
 // 1. جلب التقييمات
 export async function GET(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const className = searchParams.get("class");
   const groupName = searchParams.get("group");
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   let evaluations = data.evaluations || [];
 
   if (className && className !== "all") {
@@ -55,14 +55,14 @@ export async function GET(req: NextRequest) {
 
 // 2. تسجيل تقييم أو مجموعة تقييمات
 export async function POST(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
   try {
     const body = await req.json();
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     if (!data.evaluations) data.evaluations = [];
 
     // دعم استيراد قائمة تلاميذ دفعة واحدة
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
         createdItems.push(newEval);
       }
 
-      await saveLessonsData(data);
+      await saveLessonsData(ctx, data);
       return NextResponse.json({ success: true, count: createdItems.length, evaluations: createdItems });
     }
 
@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
     };
 
     data.evaluations.push(newEval);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, evaluation: newEval });
   } catch (err: any) {
@@ -176,8 +176,8 @@ export async function POST(req: NextRequest) {
 
 // 3. تحديث تقييم تلميذ (نقرة زر سريعة في الحصة)
 export async function PUT(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -186,7 +186,7 @@ export async function PUT(req: NextRequest) {
     const { id } = body;
     if (!id) return NextResponse.json({ error: "معرف التقييم مطلوب" }, { status: 400 });
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     if (!data.evaluations) data.evaluations = [];
 
     const item = data.evaluations.find((e) => e.id === id);
@@ -226,7 +226,7 @@ export async function PUT(req: NextRequest) {
     item.ratingColor = ratingColor;
     item.updatedAt = new Date().toISOString();
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, evaluation: item });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "فشل تحديث التقييم" }, { status: 500 });
@@ -235,8 +235,8 @@ export async function PUT(req: NextRequest) {
 
 // 4. حذف تقييم أو مسح قسم
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -245,12 +245,12 @@ export async function DELETE(req: NextRequest) {
   const clearClass = searchParams.get("class");
   const clearAll = searchParams.get("all") === "true";
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   if (!data.evaluations) data.evaluations = [];
 
   if (clearAll) {
     data.evaluations = [];
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, message: "تم مسح كافة التقييمات" });
   }
 
@@ -258,7 +258,7 @@ export async function DELETE(req: NextRequest) {
     data.evaluations = data.evaluations.filter(
       (e) => (e.className || "").replace(/\s+/g, "") !== clearClass.replace(/\s+/g, "")
     );
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, message: `تم مسح تقييمات قسم ${clearClass}` });
   }
 
@@ -266,7 +266,7 @@ export async function DELETE(req: NextRequest) {
     const idx = data.evaluations.findIndex((e) => e.id === id);
     if (idx !== -1) {
       data.evaluations.splice(idx, 1);
-      await saveLessonsData(data);
+      await saveLessonsData(ctx, data);
       return NextResponse.json({ success: true, deletedId: id });
     }
   }

@@ -7,6 +7,6 @@ export const revalidate = 0;
 export default async function YearPage({ params }: { params: Promise<{ level: string }> }) {
   const { level } = await params;
   const lv = Number(level);
-  if (lv !== 1 && lv !== 2) notFound();
-  return <YearLessons level={lv} />;
+  if (![1, 2, 3, 4].includes(lv)) notFound();
+  return <YearLessons level={lv as 1 | 2 | 3 | 4} />;
 }

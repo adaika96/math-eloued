@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
+import { requireTeacher, resolveReader } from "@/lib/auth";
 import { HonorStudent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 // جلب قائمة لوحة الشرف (عام للجميع)
-export async function GET(req: NextRequest) {
+export async function GET(
+  req: NextRequest) {
+  const ctx = await resolveReader(req);
+  if (!ctx) {
+    return NextResponse.json({ error: "يرجى تحديد الأستاذ" }, { status: 400 });
+  }
   const { searchParams } = new URL(req.url);
   const className = searchParams.get("class");
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   let honors = data.honors || [];
 
   if (className && className !== "all") {
@@ -35,8 +40,8 @@ export async function GET(req: NextRequest) {
 
 // إضافة تلميذ متميز إلى لوحة الشرف (للأستاذ فقط)
 export async function POST(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -48,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "اسم التلميذ والقسم مطلوبان" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.honors = data.honors || [];
 
     const newHonor: HonorStudent = {
@@ -61,7 +66,7 @@ export async function POST(req: NextRequest) {
     };
 
     data.honors.unshift(newHonor);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, honor: newHonor });
   } catch (err: any) {
@@ -72,8 +77,8 @@ export async function POST(req: NextRequest) {
 
 // تعديل بيانات تلميذ في لوحة الشرف (للأستاذ فقط)
 export async function PUT(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -85,7 +90,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "معرّف التلميذ مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.honors = data.honors || [];
     const item = data.honors.find((h) => h.id === id);
 
@@ -98,7 +103,7 @@ export async function PUT(req: NextRequest) {
     if (notes !== undefined) item.notes = String(notes).trim() || undefined;
     if (badge !== undefined) item.badge = String(badge).trim() || undefined;
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, honor: item });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "فشل التعديل" }, { status: 500 });
@@ -107,8 +112,8 @@ export async function PUT(req: NextRequest) {
 
 // حذف تلميذ من لوحة الشرف (للأستاذ فقط)
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -125,7 +130,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.honors = data.honors || [];
     const index = data.honors.findIndex((h) => h.id === id);
 
@@ -134,7 +139,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     data.honors.splice(index, 1);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, deletedId: id });
   } catch (err: any) {

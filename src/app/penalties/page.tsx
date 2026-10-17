@@ -28,13 +28,13 @@ export default function PenaltiesPage() {
       .then((res) => res.json())
       .then((authData) => {
         if (!authData.authenticated) {
-          window.location.href = "/";
+          window.location.href = "/login?next=/penalties";
         } else {
           fetchPenalties();
         }
       })
       .catch(() => {
-        window.location.href = "/";
+        window.location.href = "/login?next=/penalties";
       });
   }, []);
 
@@ -92,7 +92,7 @@ export default function PenaltiesPage() {
             <span className="text-red-600 text-sm font-black">⚠️</span>
           </div>
           <p className="text-[11px] text-red-700 font-bold truncate">
-            الأستاذ محمد عدايكة — متوسطة المجاهد باهي علي
+            سجل خاص بالأستاذ — لا يظهر للأولياء ولا للتلاميذ
           </p>
         </div>
       </div>

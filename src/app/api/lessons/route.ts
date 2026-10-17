@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData, deleteImageFile } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
-import { Lesson, NotebookType } from "@/lib/types";
+import { requireTeacher, resolveReader } from "@/lib/auth";
+import { Lesson, NotebookType, hideUnpublishedSolution } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 // جلب الدروس والأعمال الموجهة والسلاسل والملخصات
-export async function GET(req: NextRequest) {
+export async function GET(
+  req: NextRequest) {
+  const ctx = await resolveReader(req);
+  if (!ctx) {
+    return NextResponse.json({ error: "يرجى تحديد الأستاذ" }, { status: 400 });
+  }
   const { searchParams } = new URL(req.url);
   const levelParam = searchParams.get("level");
   const typeParam = searchParams.get("type"); // "lessons" | "directed_work" | "worksheets" | "summaries"
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
 
   let lessons = data.lessons;
 
@@ -35,6 +40,10 @@ export async function GET(req: NextRequest) {
   // ترتيب الدروس تصاعدياً حسب رقم الدرس / الحصة / السلسلة
   lessons.sort((a, b) => a.number - b.number);
 
+  if (ctx.mode === "public") {
+    lessons = lessons.map((l) => hideUnpublishedSolution(l));
+  }
+
   return NextResponse.json(
     { lessons },
     {
@@ -49,8 +58,8 @@ export async function GET(req: NextRequest) {
 
 // إضافة درس / حصة أعمال موجهة / سلسلة / ملخص (للأستاذ فقط)
 export async function POST(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -73,7 +82,7 @@ export async function POST(req: NextRequest) {
       itemNum = parseInt(match[1], 10);
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     const existingSame = data.lessons.filter(
       (l) => l.level === Number(level) && (notebookType === "lessons" ? (!l.type || l.type === "lessons") : l.type === notebookType)
     );
@@ -98,7 +107,7 @@ export async function POST(req: NextRequest) {
     };
 
     data.lessons.push(newLesson);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ lesson: newLesson });
   } catch (err: any) {
@@ -109,20 +118,20 @@ export async function POST(req: NextRequest) {
 
 // تعديل بيانات درس / حصة أعمال موجهة / سلسلة / ملخص (للأستاذ فقط)
 export async function PUT(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
   try {
     const body = await req.json();
-    const { id, title, number, field, section, notes, homeworkNotes, type } = body;
+    const { id, title, number, field, section, notes, homeworkNotes, type, homeworkDueAt, solutionPublishAt } = body;
 
     if (!id) {
       return NextResponse.json({ error: "معرّف العنصر مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     const lesson = data.lessons.find((l) => l.id === id);
     if (!lesson) {
       return NextResponse.json({ error: "العنصر غير موجود" }, { status: 404 });
@@ -134,12 +143,19 @@ export async function PUT(req: NextRequest) {
     if (section !== undefined) lesson.section = section ? String(section).trim() : undefined;
     if (notes !== undefined) lesson.notes = notes ? String(notes).trim() : undefined;
     if (homeworkNotes !== undefined) lesson.homeworkNotes = homeworkNotes ? String(homeworkNotes).trim() : undefined;
+    const toIso = (v: unknown) => {
+      if (!v) return undefined;
+      const d = new Date(String(v));
+      return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+    };
+    if (homeworkDueAt !== undefined) lesson.homeworkDueAt = toIso(homeworkDueAt);
+    if (solutionPublishAt !== undefined) lesson.solutionPublishAt = toIso(solutionPublishAt);
     if (type !== undefined) {
       const validTypes: NotebookType[] = ["lessons", "directed_work", "worksheets", "summaries"];
       if (validTypes.includes(type)) lesson.type = type;
     }
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, lesson });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "فشل التعديل" }, { status: 500 });
@@ -148,8 +164,8 @@ export async function PUT(req: NextRequest) {
 
 // حذف عنصر وصوره (للأستاذ فقط)
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -166,7 +182,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     const index = data.lessons.findIndex((l) => l.id === id);
     if (index === -1) {
       return NextResponse.json({ error: "العنصر غير موجود" }, { status: 404 });
@@ -178,12 +194,12 @@ export async function DELETE(req: NextRequest) {
     if (removed.images && Array.isArray(removed.images)) {
       for (const img of removed.images) {
         if (img?.url) {
-          await deleteImageFile(img.url);
+          await deleteImageFile(ctx, img.url);
         }
       }
     }
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, deletedId: id });
   } catch (err: any) {
     console.error("DELETE lesson error:", err);

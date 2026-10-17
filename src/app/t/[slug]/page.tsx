@@ -11,9 +11,15 @@ import {
   ArrowRight,
   MapPin,
   Trophy,
+  CalendarClock,
+  Users,
+  MessageCircle,
 } from "lucide-react";
 import { UserProfile, LEVELS } from "@/lib/types";
 import SaveToWalletButton from "@/components/SaveToWalletButton";
+import { normalizeData, readPublicTeacherData } from "@/lib/storage";
+import { findPublicTeacher } from "@/lib/teachers";
+import { TeacherQR } from "@/components/TeacherQR";
 
 interface TeacherPageProps {
   params: Promise<{
@@ -27,33 +33,19 @@ export const revalidate = 0;
 export default async function TeacherPublicSpace({ params }: TeacherPageProps) {
   const { slug } = await params;
 
-  // 1. البحث عن الأستاذ بالرابط أو بالكود
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .or(`slug.eq.${slug},teacher_code.eq.${slug.toUpperCase()}`)
-    .single();
-
+  const profile = await findPublicTeacher(slug);
   if (!profile) {
     notFound();
   }
 
-  // 2. جلب إعلانات الأستاذ
-  const { data: announcements } = await supabase
-    .from("announcements")
-    .select("*")
-    .eq("teacher_id", profile.id)
-    .order("created_at", { ascending: false })
-    .limit(3);
+  // 2. بيانات الأستاذ العامة: الدروس والإعلانات (من فضائه المستقل)
+  const publicData = await readPublicTeacherData(supabase, profile.id).catch(() => normalizeData({}));
 
-  // 3. جلب دروس الأستاذ وإحصائياتها
-  const { data: lessons } = await supabase
-    .from("lessons")
-    .select("id, level, number, title, type")
-    .eq("teacher_id", profile.id)
-    .eq("is_published", true);
-
-  const teacherLessons = lessons || [];
+  const announcements = (publicData.announcements ?? [])
+    .filter((a) => a.active !== false)
+    .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 3);
+  const teacherLessons = publicData.lessons;
 
   const districtNames: Record<number, string> = {
     1: "المقاطعة 1 — الوادي 1",
@@ -187,6 +179,50 @@ export default async function TeacherPublicSpace({ params }: TeacherPageProps) {
             مشاهدة
           </Link>
         </div>
+
+        {/* خدمات الولي: الاستقبال، الاستدعاءات، الرسائل المجهولة */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <Link
+            href={`/announcement?teacher=${profile.id}`}
+            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-teal-300 transition flex items-center gap-3"
+          >
+            <span className="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+              <CalendarClock className="w-4 h-4" />
+            </span>
+            <span className="text-xs">
+              <strong className="block text-slate-800">ساعة الاستقبال</strong>
+              <span className="text-slate-500">
+                {profile.reception?.officialDay ? `كل ${profile.reception.officialDay}` : "التوجيهات والمواعيد"}
+              </span>
+            </span>
+          </Link>
+          <Link
+            href={`/parents?teacher=${profile.id}`}
+            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-sky-300 transition flex items-center gap-3"
+          >
+            <span className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4" />
+            </span>
+            <span className="text-xs">
+              <strong className="block text-slate-800">أولياء أود استقبالهم</strong>
+              <span className="text-slate-500">هل ابنك معني بلقاء؟</span>
+            </span>
+          </Link>
+          <Link
+            href={`/messages?teacher=${profile.id}`}
+            className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm hover:border-violet-300 transition flex items-center gap-3"
+          >
+            <span className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+              <MessageCircle className="w-4 h-4" />
+            </span>
+            <span className="text-xs">
+              <strong className="block text-slate-800">رسالة سرية للأستاذ</strong>
+              <span className="text-slate-500">سؤال أو اقتراح دون ذكر الاسم</span>
+            </span>
+          </Link>
+        </div>
+
+        <TeacherQR path={`/t/${profile.slug || profile.id}`} teacherName={profile.full_name || "الأستاذ"} code={profile.teacher_code} />
       </div>
     </div>
   );

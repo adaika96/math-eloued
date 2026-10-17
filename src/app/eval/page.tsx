@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { LoginRequired } from "@/components/LoginRequired";
 import {
   ClipboardCheck,
   Calculator,
@@ -69,72 +70,7 @@ export default function FastEvaluationPage() {
   return authenticated ? (
     <EvaluationDashboard onLogout={() => setAuthenticated(false)} />
   ) : (
-    <FastLogin onLogin={() => setAuthenticated(true)} />
-  );
-}
-
-/* ---------------- 1. تسجيل الدخول السريع ---------------- */
-function FastLogin({ onLogin }: { onLogin: () => void }) {
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setErr("");
-    try {
-      const res = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        onLogin();
-      } else {
-        setErr(data.error || "كلمة المرور غير صحيحة");
-      }
-    } catch {
-      setErr("تعذر الاتصال بالخادم");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="pt-16 max-w-sm mx-auto space-y-4 px-4 fade-up">
-      <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2 shadow-2xs">
-        <ClipboardCheck className="w-7 h-7" />
-      </div>
-      <h1 className="text-xl font-black text-center text-slate-800">
-        دفتر التقييم الميداني السريع
-      </h1>
-      <p className="text-xs text-center text-slate-500">
-        خاص بالأستاذ محمد عدايكة لتفقد الكراريس والواجبات في حصة الأعمال الموجهة
-      </p>
-
-      <form onSubmit={submit} className="space-y-3 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
-        <input
-          className="w-full text-center py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          type="password"
-          placeholder="كلمة المرور الخاصة بالأستاذ..."
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          dir="ltr"
-          autoFocus
-        />
-        {err && <p className="text-xs text-center text-red-600 font-bold">{err}</p>}
-
-        <button
-          disabled={busy}
-          className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-sm"
-        >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "دخول إلى دفتر التقييم"}
-        </button>
-      </form>
-    </div>
+    <LoginRequired next="/eval" title="دفتر التقييم الميداني السريع" />
   );
 }
 
@@ -316,7 +252,6 @@ function EvaluationDashboard({ onLogout }: { onLogout: () => void }) {
   const handleExportJson = () => {
     const exportObject = {
       platform: "MathLessonsEvaluation",
-      teacher: "محمد عدايكة",
       className: selectedClass,
       exportedAt: new Date().toISOString(),
       dateArabic: new Date().toLocaleDateString("ar-DZ"),
@@ -758,7 +693,7 @@ function EvaluationDashboard({ onLogout }: { onLogout: () => void }) {
             </div>
             <div>
               <h1 className="text-xs font-black text-slate-900">دفتر التقييم الميداني السريع</h1>
-              <p className="text-[10px] text-emerald-700 font-bold">الأستاذ محمد عدايكة — مادة الرياضيات</p>
+              <p className="text-[10px] text-emerald-700 font-bold">مادة الرياضيات — فضاء الأستاذ</p>
             </div>
           </div>
 

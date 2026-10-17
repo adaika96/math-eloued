@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey =
@@ -8,16 +9,17 @@ const supabaseAnonKey =
 
 export const isConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase = createClient(
-  supabaseUrl || "https://placeholder.supabase.co",
-  supabaseAnonKey || "placeholder-anon-key",
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-    },
-  }
-);
+export const SUPABASE_URL = supabaseUrl || "https://placeholder.supabase.co";
+export const SUPABASE_ANON_KEY = supabaseAnonKey || "placeholder-anon-key";
+
+// في المتصفح: عميل يحفظ الجلسة في الكوكيز (لتصل إلى نقاط النهاية /api على الخادم)
+// على الخادم (صفحات عامة): عميل مجهول للقراءة العامة فقط
+export const supabase =
+  typeof window === "undefined"
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+    : createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // أسماء مخازن الملفات السحابية
 export const BUCKETS = {
@@ -33,15 +35,21 @@ export function getPublicMediaUrl(path: string) {
   return supabase.storage.from(BUCKETS.PUBLIC_LESSONS).getPublicUrl(path).data.publicUrl;
 }
 
-// رابط مشفر ومؤقت (15 دقيقة) للمذكرات التربوية بين الأستاذ والمفتش فقط
-export async function getPrivateNoteSignedUrl(path: string, expiresInSeconds = 900) {
+// رابط مشفر ومؤقت (15 دقيقة) للملفات الخاصة بين الأستاذ والمفتش فقط
+export async function getPrivateSignedUrl(
+  bucket: (typeof BUCKETS)["PRIVATE_NOTES"] | (typeof BUCKETS)["INSPECTOR_DOCS"],
+  path: string,
+  expiresInSeconds = 900
+) {
   if (!path) return "";
-  const { data, error } = await supabase.storage
-    .from(BUCKETS.PRIVATE_NOTES)
-    .createSignedUrl(path, expiresInSeconds);
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresInSeconds);
   if (error) {
-    console.error("Error creating signed URL for pedagogical note:", error);
+    console.error("Error creating signed URL:", error);
     return "";
   }
   return data.signedUrl;
+}
+
+export async function getPrivateNoteSignedUrl(path: string, expiresInSeconds = 900) {
+  return getPrivateSignedUrl(BUCKETS.PRIVATE_NOTES, path, expiresInSeconds);
 }

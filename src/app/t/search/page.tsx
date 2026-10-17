@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { PUBLIC_TEACHER_COLUMNS } from "@/lib/teachers";
 import { Search, Building2, User, ArrowRight, ChevronLeft } from "lucide-react";
 
 interface SearchPageProps {
@@ -12,14 +13,15 @@ export const dynamic = "force-dynamic";
 
 export default async function TeacherSearchPage({ searchParams }: SearchPageProps) {
   const { q } = await searchParams;
-  const query = (q || "").trim();
+  // إزالة المحارف الخاصة بصيغة فلاتر PostgREST لمنع التلاعب بالاستعلام
+  const query = (q || "").replace(/[,()*%\:"]/g, " ").trim().slice(0, 60);
 
   let teachers: any[] = [];
 
   if (query) {
     const { data } = await supabase
       .from("profiles")
-      .select("*")
+      .select(PUBLIC_TEACHER_COLUMNS)
       .eq("role", "teacher")
       .or(
         `full_name.ilike.%${query}%,school_custom_name.ilike.%${query}%,teacher_code.ilike.%${query}%`

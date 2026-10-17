@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
+import { requireTeacher, resolveReader } from "@/lib/auth";
 import { Announcement, AnnouncementCategory } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 // جلب قائمة الإعلانات (متاح للجميع)
-export async function GET(req: NextRequest) {
+export async function GET(
+  req: NextRequest) {
+  const ctx = await resolveReader(req);
+  if (!ctx) {
+    return NextResponse.json({ error: "يرجى تحديد الأستاذ" }, { status: 400 });
+  }
   const { searchParams } = new URL(req.url);
   const all = searchParams.get("all") === "true";
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   let list = data.announcements || [];
 
   // إذا لم يكن طلباً شاملاً، نظهر الإعلانات النشطة فقط
@@ -40,8 +45,8 @@ export async function GET(req: NextRequest) {
 
 // إضافة إعلان جديد (للأستاذ فقط)
 export async function POST(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -53,7 +58,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "عنوان الإعلان وتفاصيله مطلوبان" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.announcements = data.announcements || [];
 
     const now = new Date();
@@ -69,7 +74,7 @@ export async function POST(req: NextRequest) {
     };
 
     data.announcements.unshift(newAnnouncement);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, announcement: newAnnouncement });
   } catch (e: any) {
@@ -79,8 +84,8 @@ export async function POST(req: NextRequest) {
 
 // تعديل إعلان (للأستاذ فقط)
 export async function PUT(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -92,7 +97,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "معرّف الإعلان مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.announcements = data.announcements || [];
 
     const index = data.announcements.findIndex((a) => a.id === id);
@@ -111,7 +116,7 @@ export async function PUT(req: NextRequest) {
       active: active !== undefined ? Boolean(active) : existing.active,
     };
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, announcement: data.announcements[index] });
   } catch (e: any) {
@@ -121,8 +126,8 @@ export async function PUT(req: NextRequest) {
 
 // حذف إعلان (للأستاذ فقط)
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -134,10 +139,10 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "معرّف الإعلان مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.announcements = (data.announcements || []).filter((a) => a.id !== id);
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

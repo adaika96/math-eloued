@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { useTeacherId, withTeacher, teacherHomeHref, useTeacherInfo, teacherLabel } from "@/lib/teacherParam";
 import {
   ArrowRight,
   Users,
@@ -16,13 +17,15 @@ import { HONOR_CLASSES, type ParentSummons } from "@/lib/types";
 import { Loading } from "@/components/ui";
 
 export default function ParentsPage() {
+  const teacherId = useTeacherId();
+  const teacherInfo = useTeacherInfo(teacherId);
   const [summons, setSummons] = useState<ParentSummons[] | null>(null);
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/summons?_t=${Date.now()}`, { cache: "no-store" })
+    fetch(withTeacher(`/api/summons?_t=${Date.now()}`), { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         setSummons(data.summons || []);
@@ -65,7 +68,7 @@ export default function ParentsPage() {
       {/* رأس الصفحة وزر الرجوع */}
       <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl border border-sky-100 shadow-2xs">
         <Link
-          href="/"
+          href={teacherHomeHref(teacherId)}
           className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700 hover:bg-sky-100 active:scale-95 transition shrink-0"
           aria-label="الرجوع"
         >
@@ -81,7 +84,7 @@ export default function ParentsPage() {
             </span>
           </div>
           <p className="text-[11px] text-slate-500 font-bold truncate">
-            الأستاذ محمد عدايكة — متوسطة المجاهد باهي علي
+            {teacherLabel(teacherInfo)}
           </p>
         </div>
       </div>

@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
+import { requireTeacher, resolveReader } from "@/lib/auth";
 import { ParentSummons } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 // جلب قائمة استدعاءات الأولياء (عام للأولياء والتلاميذ)
-export async function GET(_req: NextRequest) {
-  const data = await getLessonsData();
+export async function GET(
+  req: NextRequest) {
+  const ctx = await resolveReader(req);
+  if (!ctx) {
+    return NextResponse.json({ error: "يرجى تحديد الأستاذ" }, { status: 400 });
+  }
+  const data = await getLessonsData(ctx);
   const summons = data.summons || [];
 
   // ترتيب الاستدعاءات: الحالات المستعجلة أولاً، ثم الأحدث
@@ -32,8 +37,8 @@ export async function GET(_req: NextRequest) {
 
 // إضافة استدعاء ولي أمر جديد (للأستاذ فقط)
 export async function POST(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -52,7 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "اسم التلميذ والقسم مطلوبان" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.summons = data.summons || [];
 
     const created: ParentSummons[] = [];
@@ -70,7 +75,7 @@ export async function POST(req: NextRequest) {
       data.summons.unshift(newSummons);
     }
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, summons: created[0], allSummons: created });
   } catch (err: any) {
@@ -81,8 +86,8 @@ export async function POST(req: NextRequest) {
 
 // تعديل استدعاء (للأستاذ فقط)
 export async function PUT(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -94,7 +99,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "معرّف الاستدعاء مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.summons = data.summons || [];
     const item = data.summons.find((s) => s.id === id);
 
@@ -107,7 +112,7 @@ export async function PUT(req: NextRequest) {
     if (notes !== undefined) item.notes = notes ? String(notes).trim() : undefined;
     if (isUrgent !== undefined) item.isUrgent = Boolean(isUrgent);
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, summons: item });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "فشل التعديل" }, { status: 500 });
@@ -116,8 +121,8 @@ export async function PUT(req: NextRequest) {
 
 // حذف استدعاء (للأستاذ فقط)
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -134,7 +139,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.summons = data.summons || [];
     const index = data.summons.findIndex((s) => s.id === id);
 
@@ -143,7 +148,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     data.summons.splice(index, 1);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, deletedId: id });
   } catch (err: any) {

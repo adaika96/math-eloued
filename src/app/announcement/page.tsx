@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import { PUBLIC_TEACHER_COLUMNS } from "@/lib/teachers";
+import { useTeacherId, teacherHomeHref } from "@/lib/teacherParam";
+import type { UserProfile } from "@/lib/types";
 import {
   ArrowRight,
   Calendar,
@@ -21,13 +25,27 @@ import {
 
 export default function AnnouncementPage() {
   const [activeTab, setActiveTab] = useState<"all" | "supplies" | "reception">("all");
+  const teacherId = useTeacherId();
+  const [teacher, setTeacher] = useState<UserProfile | null>(null);
+
+  // بطاقة استقبال الأستاذ ونبذته من ملفه العام
+  useEffect(() => {
+    if (!teacherId) return;
+    supabase
+      .from("profiles")
+      .select(PUBLIC_TEACHER_COLUMNS)
+      .eq("id", teacherId)
+      .maybeSingle()
+      .then(({ data }) => setTeacher((data as UserProfile) ?? null));
+  }, [teacherId]);
+  const reception = teacher?.reception;
 
   return (
     <div className="pb-16 pt-3 fade-up space-y-5">
       {/* رأس الصفحة وزر الرجوع */}
       <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs">
         <Link
-          href="/"
+          href={teacherHomeHref(teacherId)}
           className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95 transition shrink-0"
           aria-label="الرجوع للرئيسية"
         >
@@ -41,7 +59,7 @@ export default function AnnouncementPage() {
             دليل التوجيهات التربوية وتنظيم الكراريس
           </h1>
           <p className="text-[11px] text-slate-500">
-            الأستاذ محمد عدايكة — متوسطة المجاهد باهي علي
+            {teacher ? `${teacher.full_name}${teacher.school_custom_name ? ` — ${teacher.school_custom_name}` : ""}` : "مادة الرياضيات — التعليم المتوسط"}
           </p>
         </div>
       </div>
@@ -187,40 +205,64 @@ export default function AnnouncementPage() {
             </div>
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2.5 text-xs">
-            <div className="flex items-center gap-2 text-emerald-800 font-extrabold">
-              <Clock className="w-4 h-4 text-emerald-600" />
-              <span>الموعد: كل يوم أربعاء من 10:00 إلى 11:00 صباحاً</span>
+          {reception?.officialDay ? (
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-2.5 text-xs">
+              <div className="flex items-center gap-2 text-emerald-800 font-extrabold">
+                <Clock className="w-4 h-4 text-emerald-600" />
+                <span>
+                  الموعد الرسمي: كل {reception.officialDay}
+                  {reception.officialTime ? ` (${reception.officialTime})` : ""}
+                </span>
+              </div>
+              {reception.extraDay && (
+                <div className="flex items-center gap-2 text-teal-800 font-bold">
+                  <Calendar className="w-4 h-4 text-teal-600" />
+                  <span>
+                    موعد إضافي: {reception.extraDay}
+                    {reception.extraTime ? ` (${reception.extraTime})` : ""}
+                  </span>
+                </div>
+              )}
+              {(reception.location || teacher?.school_custom_name) && (
+                <div className="flex items-center gap-2 text-slate-700 font-bold">
+                  <MapPin className="w-4 h-4 text-slate-500" />
+                  <span>{[reception.location, teacher?.school_custom_name].filter(Boolean).join(" — ")}</span>
+                </div>
+              )}
+              {reception.guidance && (
+                <p className="text-slate-600 text-[11px] leading-relaxed whitespace-pre-wrap">
+                  <strong>توجيهات الأستاذ للأولياء:</strong> {reception.guidance}
+                </p>
+              )}
             </div>
-            <p className="text-slate-600 text-[11px] leading-relaxed">
-              <strong>رسالة من القلب لأولياء الأمور:</strong> أرحب بكم بكل سرور في ساعة الاستقبال للاطمئنان على مستوى أبنائكم. نرجو أن يكون الحرص من بداية السنة (تفقد الكراس، التأكد من حل الواجبات، متابعة الانضباط)، وليس فقط الحضور بعد إعلان كشوف النقاط للمطالبة بزيادة العلامات؛ فالتنقيط أمانة وعدل لا محاباة فيه.
+          ) : (
+            <p className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs text-slate-500">
+              {teacherId ? "لم يحدد الأستاذ موعد الاستقبال بعد. يرجى الاستفسار لدى إدارة المتوسطة." : "افتح هذه الصفحة من فضاء أستاذ ابنك لمعرفة موعد استقباله."}
             </p>
-          </div>
+          )}
         </section>
       )}
 
-      {/* ==================== 5. نبذة عن الأستاذ والمنصة ==================== */}
-      <section className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
-            <GraduationCap className="w-4 h-4 text-emerald-400" />
+      {/* ==================== 5. نبذة عن الأستاذ ==================== */}
+      {teacher?.bio && (
+        <section className="bg-slate-900 text-white rounded-3xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center">
+              <GraduationCap className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black">نبذة عن الأستاذ</h3>
+              <p className="text-[10px] text-slate-400">{teacher.full_name}</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xs font-black">نبذة عن الأستاذ في مجال التعليم</h3>
-            <p className="text-[10px] text-slate-400">محمد عدايكة — باحث وأستاذ مادة الرياضيات</p>
-          </div>
-        </div>
-        <p className="text-[11px] text-slate-300 leading-relaxed">
-          • طالب دكتوراه (سنة 4) بجامعة برج بوعريرج.<br />
-          • من مؤسسي منصة <strong>تعلم بلس</strong> لتطوير التعليم رقمياً، وتطبيقات تعليمية متوفرة على متجر Google Play.<br />
-          • تم تطوير هذا الموقع الخاص بالدروس لمساعدة التلاميذ على تدارك أي درس غابوا عنه، لكن تبقى الكتابة الحية في القسم هي الأساس الإلزامي.
-        </p>
-      </section>
+          <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-wrap">{teacher.bio}</p>
+        </section>
+      )}
 
       {/* زر العودة للدروس */}
       <div className="text-center pt-2">
         <Link
-          href="/"
+          href={teacherHomeHref(teacherId)}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 active:scale-95 transition shadow-sm"
         >
           <span>العودة لاختيار السنة الدراسية والدروس</span>

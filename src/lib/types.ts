@@ -32,7 +32,18 @@ export type Lesson = {
   images: LessonImage[];
   homeworkImages?: LessonImage[]; // صور الحل النموذجي للواجب المنزلي
   homeworkNotes?: string; // ملاحظات أو رقم تمارين الواجب المنزلي
+  homeworkDueAt?: string; // آخر أجل لإنجاز الواجب (ISO)
+  solutionPublishAt?: string; // لا يظهر الحل النموذجي للأولياء قبل هذا التاريخ (ISO)
+  solutionLocked?: boolean; // يُضاف في الاستجابة العامة عندما يكون الحل محجوباً بعد
 };
+
+// حجب الحل النموذجي عن الأولياء والتلاميذ حتى انتهاء مهلة الواجب
+export function hideUnpublishedSolution(lesson: Lesson, now = Date.now()): Lesson {
+  if (lesson.solutionPublishAt && new Date(lesson.solutionPublishAt).getTime() > now) {
+    return { ...lesson, homeworkImages: [], solutionLocked: true };
+  }
+  return lesson;
+}
 
 export type ParentSummons = {
   id: string;
@@ -194,6 +205,16 @@ export interface MiddleSchool {
 
 export type UserRole = "teacher" | "inspector" | "admin";
 
+// بطاقة الاستقبال الرسمية للأستاذ (يعدلها من صفحة الإعدادات)
+export interface ReceptionInfo {
+  officialDay?: string;
+  officialTime?: string;
+  extraDay?: string;
+  extraTime?: string;
+  location?: string;
+  guidance?: string;
+}
+
 export interface UserProfile {
   id: string;
   role: UserRole;
@@ -216,6 +237,7 @@ export interface UserProfile {
   bio?: string;
   is_verified?: boolean;
   isVerified?: boolean;
+  reception?: ReceptionInfo | null;
   created_at?: string;
   createdAt?: string;
 }
@@ -241,11 +263,56 @@ export interface PedagogicalNote {
   reviewed_at?: string;
   reviewedAt?: string;
   status: "submitted" | "reviewed" | "needs_revision";
+  doc_type?: PedagogicalDocType;
+  field?: string | null;
+  section?: string | null;
+  session_number?: number | null;
   created_at?: string;
   createdAt?: string;
   updated_at?: string;
   updatedAt?: string;
 }
+
+// أنواع وثائق الملف البيداغوجي (بين الأستاذ والمفتش)
+export type PedagogicalDocType = "lesson_plan" | "annual_distribution" | "cahier_textes" | "diagnostic" | "other";
+
+export const PEDAGOGICAL_DOC_TYPES: Record<PedagogicalDocType, { label: string; icon: string }> = {
+  lesson_plan: { label: "مذكرة حصة", icon: "📝" },
+  annual_distribution: { label: "التوزيع السنوي وتدرج التعلمات", icon: "🗓️" },
+  cahier_textes: { label: "دفتر النصوص", icon: "📒" },
+  diagnostic: { label: "نتائج التقويم التشخيصي", icon: "📊" },
+  other: { label: "وثيقة أخرى", icon: "📎" },
+};
+
+export const NOTE_STATUS: Record<PedagogicalNote["status"], { label: string; className: string }> = {
+  submitted: { label: "قيد المراجعة", className: "bg-amber-50 text-amber-800 border-amber-200" },
+  reviewed: { label: "تمت المعاينة ✅", className: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+  needs_revision: { label: "تحتاج تعديلاً", className: "bg-red-50 text-red-700 border-red-200" },
+};
+
+// جدول التوقيت الأسبوعي
+export const SCHOOL_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس"] as const;
+
+export interface TimetableSlot {
+  day: (typeof SCHOOL_DAYS)[number];
+  start: string; // "08:00"
+  end: string; // "09:00"
+  className: string; // "2م1"
+  room?: string; // "04"
+}
+
+export interface TeacherTimetable {
+  teacher_id: string;
+  slots: TimetableSlot[];
+  image_path?: string | null;
+  updated_at?: string;
+}
+
+export const CIRCULAR_IMPORTANCE: Record<InspectorCircular["importance"], { label: string; className: string }> = {
+  urgent: { label: "عاجل", className: "bg-red-50 text-red-700 border-red-200" },
+  seminar: { label: "ندوة تكوينية", className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  normal: { label: "عادي", className: "bg-slate-50 text-slate-600 border-slate-200" },
+};
 
 export interface InspectorCircular {
   id: string;
@@ -262,6 +329,8 @@ export interface InspectorCircular {
   attachment_path?: string;
   attachmentPath?: string;
   importance: "normal" | "urgent" | "seminar";
+  event_date?: string | null; // تاريخ الندوة / الملتقى
+  event_place?: string | null; // المتوسطة المستقبلة
   created_at?: string;
   createdAt?: string;
   readCount?: number;

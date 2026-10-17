@@ -60,7 +60,7 @@ export default function AssessmentPage() {
             </span>
           </div>
           <p className="text-[11px] text-slate-500 font-bold truncate">
-            الأستاذ محمد عدايكة — متوسطة المجاهد باهي علي
+            ميثاق التقويم المستمر — مادة الرياضيات (التعليم المتوسط)
           </p>
         </div>
       </div>

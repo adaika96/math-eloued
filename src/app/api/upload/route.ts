@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData, uploadImageFile } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
+import { requireTeacher } from "@/lib/auth";
+import { rateLimit } from "@/lib/rateLimit";
+
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FILES_PER_REQUEST = 20;
 import { LessonImage } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -20,7 +25,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "بيانات ناقصة: لم يتم إرسال أي ملف" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const limited = rateLimit(`upload:${ctx.teacherId}`, 120, 10 * 60_000);
+    if (limited) return limited;
+
+    if (allFiles.length > MAX_FILES_PER_REQUEST) {
+      return NextResponse.json({ error: `الحد الأقصى ${MAX_FILES_PER_REQUEST} ملفاً في المرة الواحدة` }, { status: 400 });
+    }
+    for (const f of allFiles) {
+      const pdfByName = f.name?.toLowerCase().endsWith(".pdf");
+      if (!ALLOWED_TYPES.includes(f.type) && !(pdfByName && (!f.type || f.type === "application/octet-stream"))) {
+        return NextResponse.json({ error: `نوع الملف غير مسموح: ${f.name} (صور JPG/PNG/WebP أو PDF فقط)` }, { status: 415 });
+      }
+      if (f.size > MAX_FILE_BYTES) {
+        return NextResponse.json({ error: `الملف ${f.name} يتجاوز 10 ميغابايت` }, { status: 413 });
+      }
+    }
+
+    const data = await getLessonsData(ctx);
     const lesson = data.lessons.find((l) => l.id === lessonId);
     if (!lesson) {
       return NextResponse.json({ error: "الدرس غير موجود" }, { status: 404 });
@@ -41,6 +62,7 @@ export async function POST(req: NextRequest) {
         : (isHomework ? `homework-solution-${i + 1}.jpg` : `lesson-image-${i + 1}.jpg`);
 
       const { url, downloadUrl } = await uploadImageFile(
+        ctx,
         file,
         file.name || fallbackFileName,
         lessonId,
@@ -75,7 +97,7 @@ export async function POST(req: NextRequest) {
       lesson.images.push(...newImages);
     }
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({
       images: newImages,

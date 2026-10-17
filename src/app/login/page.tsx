@@ -40,15 +40,19 @@ export default function LoginPage() {
         .single();
 
       if (profileErr || !profile) {
-        // افتراضياً توجيه للوحة الأستاذ
-        router.push("/admin");
-        return;
+        throw new Error("تعذر تحميل ملف الحساب، يرجى المحاولة مرة أخرى");
       }
 
-      if (profile.role === "inspector") {
+      // توجيه ذكي حسب الدور، مع احترام صفحة الوجهة ?next= لحسابات الأساتذة
+      const next = new URLSearchParams(window.location.search).get("next");
+      const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+
+      if (profile.role === "admin") {
+        router.push("/super-admin");
+      } else if (profile.role === "inspector") {
         router.push("/inspector");
       } else {
-        router.push("/admin");
+        router.push(safeNext || "/admin");
       }
     } catch (err: any) {
       console.error("Login error:", err);

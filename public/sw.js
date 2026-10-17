@@ -1,15 +1,13 @@
 // Service Worker for Offline Classroom Support - Math Lessons Platform
-const CACHE_NAME = "math-lessons-v2";
-const OFFLINE_PAGES = [
-  "/",
-  "/eval",
-  "/admin",
-  "/assessment",
-  "/honor",
-  "/parents",
-  "/year/1",
-  "/year/2",
-];
+const CACHE_NAME = "math-eloued-v3";
+const OFFLINE_PAGES = ["/", "/t/search", "/t/schools", "/assessment"];
+
+// نقاط النهاية العامة التي يمكن حفظها لتصفح الدروس بدون إنترنت (بيانات الأولياء فقط)
+const CACHEABLE_PUBLIC_API = ["/api/lessons", "/api/honors"];
+
+function isCacheablePublicApi(url) {
+  return url.searchParams.has("teacher") && CACHEABLE_PUBLIC_API.some((p) => url.pathname.startsWith(p));
+}
 
 // Install Event: pre-cache key pages
 self.addEventListener("install", (event) => {
@@ -45,9 +43,22 @@ self.addEventListener("fetch", (event) => {
 
   // For API calls: let fetch proceed, or fallback to cache if available
   if (url.pathname.startsWith("/api/")) {
+    const cacheable = isCacheablePublicApi(url);
+    // مفتاح الحفظ بدون معامل منع التخزين المؤقت (_t / t)
+    const cacheKey = new URL(url);
+    cacheKey.searchParams.delete("_t");
+    cacheKey.searchParams.delete("t");
     event.respondWith(
-      fetch(req).catch(async () => {
-        const cached = await caches.match(req);
+      fetch(req)
+        .then((response) => {
+          if (cacheable && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(cacheKey.toString(), clone));
+          }
+          return response;
+        })
+        .catch(async () => {
+        const cached = cacheable ? await caches.match(cacheKey.toString()) : null;
         if (cached) return cached;
         return new Response(JSON.stringify({ error: "أوفلاين (غير متصل بالإنترنت)", offline: true }), {
           status: 503,

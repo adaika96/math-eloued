@@ -6,72 +6,22 @@ import { Lock, Sparkles, ExternalLink, X, ClipboardCheck, Settings, CheckCircle2
 
 export function TeacherAccess() {
   const [isOpen, setIsOpen] = useState(false);
-  const [typedCode, setTypedCode] = useState("");
-  const [inputCode, setInputCode] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [teacherName, setTeacherName] = useState("");
+  const [role, setRole] = useState<string | null>(null);
 
-  // 1. مراقبة الكتابة السرية في أي مكان بالصفحة (لو كتب adaika2026 يفتح فوراً)
+  // حالة جلسة الأستاذ (حساب المنصة) عند فتح النافذة
   useEffect(() => {
-    let buffer = "";
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // تجاهل إذا كان يكتب داخل حقل إدخال عادي
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
-
-      buffer += e.key.toLowerCase();
-      if (buffer.length > 20) buffer = buffer.slice(-20);
-
-      if (buffer.includes("adaika2026")) {
-        buffer = "";
-        doAuth("adaika2026");
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // 2. فحص الرابط المباشر (مثل ?code=adaika2026)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      if (code && code.toLowerCase() === "adaika2026") {
-        doAuth("adaika2026");
-      }
-    }
-  }, []);
-
-  const doAuth = async (pass: string) => {
-    setLoading(true);
-    setErrorMsg("");
-    try {
-      const res = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pass }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setIsAuthenticated(true);
-        setIsOpen(true);
-      } else {
-        setErrorMsg(data.error || "الرمز غير صحيح");
-      }
-    } catch {
-      setErrorMsg("تعذر الاتصال بالخادم");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleManualSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputCode.trim()) return;
-    doAuth(inputCode.trim());
-  };
+    if (!isOpen) return;
+    fetch("/api/auth", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        setIsAuthenticated(Boolean(data.authenticated));
+        setRole(data.role ?? null);
+        setTeacherName(data.profile?.full_name || "");
+      })
+      .catch(() => setIsAuthenticated(false));
+  }, [isOpen]);
 
   return (
     <>
@@ -95,7 +45,7 @@ export function TeacherAccess() {
                   <Lock className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-black text-sm text-slate-900">بوابة الأستاذ محمد عدايكة</h3>
+                  <h3 className="font-black text-sm text-slate-900">{teacherName ? `فضاء ${teacherName}` : "فضاء الأستاذ"}</h3>
                   <p className="text-[10px] text-slate-400">لوحة الإدارة والتقييم الميداني</p>
                 </div>
               </div>
@@ -108,28 +58,20 @@ export function TeacherAccess() {
             </div>
 
             {!isAuthenticated ? (
-              <form onSubmit={handleManualSubmit} className="space-y-3">
+              <div className="space-y-3">
                 <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                  أدخل الرمز السري الخاص بك للمتابعة مباشرة إلى أدوات الأستاذ:
+                  {role === "inspector" || role === "admin"
+                    ? "أنت مسجل بحساب إشرافي. انتقل إلى لوحتك:"
+                    : "سجّل الدخول بحسابك على المنصة للوصول إلى أدوات الأستاذ:"}
                 </p>
-                <input
-                  type="password"
-                  className="w-full text-center py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="أدخل الرمز السري..."
-                  value={inputCode}
-                  onChange={(e) => setInputCode(e.target.value)}
-                  dir="ltr"
-                  autoFocus
-                />
-                {errorMsg && <p className="text-xs text-center text-red-600 font-bold">{errorMsg}</p>}
-
-                <button
-                  disabled={loading}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-sm"
+                <Link
+                  href={role === "inspector" ? "/inspector" : role === "admin" ? "/super-admin" : "/login"}
+                  onClick={() => setIsOpen(false)}
+                  className="block w-full text-center py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-sm"
                 >
-                  {loading ? "جاري التحقق..." : "دخول مباشر"}
-                </button>
-              </form>
+                  {role === "inspector" ? "لوحة المفتش" : role === "admin" ? "لوحة المشرف العام" : "تسجيل الدخول"}
+                </Link>
+              </div>
             ) : (
               <div className="space-y-3">
                 <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center gap-2 font-bold">

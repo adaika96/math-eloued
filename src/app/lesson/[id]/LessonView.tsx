@@ -17,17 +17,19 @@ import {
   Clock,
 } from "lucide-react";
 import Link from "next/link";
+import { useTeacherId, withTeacher, teacherHomeHref } from "@/lib/teacherParam";
 import { LEVELS, NOTEBOOKS, isPdfFile, type Lesson, type LessonImage } from "@/lib/types";
 import { Loading, Empty } from "@/components/ui";
 
 export function LessonView({ id }: { id: string }) {
+  const teacherId = useTeacherId();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [viewMode, setViewMode] = useState<"lesson" | "homework">("lesson");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/lessons/${id}?_t=${Date.now()}`, { cache: "no-store" })
+    fetch(withTeacher(`/api/lessons/${id}?_t=${Date.now()}`), { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (data.lesson) {
@@ -80,7 +82,7 @@ export function LessonView({ id }: { id: string }) {
       {/* رأس الصفحة وزر الرجوع المخصص */}
       <div className="flex items-start gap-3 bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs">
         <Link
-          href={lesson ? `/year/${lesson.level}` : "/"}
+          href={lesson ? withTeacher(`/year/${lesson.level}`, teacherId) : teacherHomeHref(teacherId)}
           className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95 transition shrink-0 mt-0.5"
           aria-label="الرجوع"
         >
@@ -229,6 +231,25 @@ export function LessonView({ id }: { id: string }) {
             </div>
           )}
 
+          {/* مهلة الواجب وموعد نشر الحل النموذجي */}
+          {viewMode === "homework" && (lesson.homeworkDueAt || lesson.solutionLocked) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 font-bold space-y-1">
+              {lesson.homeworkDueAt && (
+                <p>
+                  ⏰ آخر أجل لإنجاز الواجب:{" "}
+                  {new Date(lesson.homeworkDueAt).toLocaleString("ar-DZ", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
+              {lesson.solutionLocked && lesson.solutionPublishAt && (
+                <p>
+                  🔒 سيُنشر الحل النموذجي هنا تلقائياً يوم{" "}
+                  {new Date(lesson.solutionPublishAt).toLocaleString("ar-DZ", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+                  {" "}— حاول حل الواجب بنفسك أولاً!
+                </p>
+              )}
+            </div>
+          )}
+
           {/* صندوق توجيهات وملاحظات الواجب المنزلي إن وجدت */}
           {viewMode === "homework" && lesson.homeworkNotes && (
             <div className="bg-blue-50/90 border border-blue-200 rounded-2xl p-4 space-y-2 shadow-2xs">
@@ -254,7 +275,7 @@ export function LessonView({ id }: { id: string }) {
                     الحل النموذجي للواجب المنزلي
                   </h3>
                   <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed font-semibold">
-                    «سيقوم الأستاذ محمد عدايكة برفع الحل النموذجي المفصل هنا بعد مناقشته وتصحيحه في القسم مع التلاميذ، لتمكينكم من المراجعة والتصحيح الذاتي في كراس المحاولات (96 صفحة).»
+                    «سيقوم الأستاذ برفع الحل النموذجي المفصل هنا بعد مناقشته وتصحيحه في القسم مع التلاميذ، لتمكينكم من المراجعة والتصحيح الذاتي في كراس المحاولات (96 صفحة).»
                   </p>
                 </div>
                 <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-900 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200">

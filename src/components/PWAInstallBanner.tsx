@@ -99,7 +99,7 @@ export default function PWAInstallBanner() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-black text-xs text-white">تطبيق رياضيات عدايكة</span>
+                <span className="font-black text-xs text-white">تطبيق رياضيات الوادي</span>
                 <span className="text-[10px] bg-emerald-500/30 text-emerald-200 px-1.5 py-0.2 rounded font-bold border border-emerald-400/30">
                   PWA ⚡
                 </span>

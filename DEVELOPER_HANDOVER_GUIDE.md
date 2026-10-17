@@ -30,50 +30,17 @@
 
 ## 📁 3. هيكل المشروع (Directory Architecture)
 
-```
-math-wilaya-eloued/
-├── src/
-│   ├── app/                      # مسارات التطبيق (Next.js App Router)
-│   │   ├── page.tsx              # الصفحة الرئيسية لولاية الوادي + محفظة الولي
-│   │   ├── layout.tsx            # التخطيط العام وتضمين الخطوط والـ PWA
-│   │   ├── login/page.tsx        # تسجيل الدخول الموحد لجميع الرتب
-│   │   ├── register/page.tsx     # تسجيل أستاذ جديد وتوليد كود الأستاذ
-│   │   ├── admin/page.tsx        # لوحة تحكم الأستاذ الشاملة
-│   │   ├── inspector/page.tsx    # لوحة قيادة مفتش المقاطعة
-│   │   ├── super-admin/page.tsx  # لوحة المشرف العام لترقية المفتشين
-│   │   ├── t/[slug]/page.tsx     # صفحة الأستاذ العامة للأولياء والتلاميذ
-│   │   ├── t/search/page.tsx     # البحث عن أستاذ بالكود أو الاسم
-│   │   ├── year/[level]/page.tsx # عرض دروس وسلاسل سنة محددة (1م إلى 4م)
-│   │   ├── lesson/[id]/page.tsx  # عرض سبورة الدرس والتكبير عالي الدقة
-│   │   └── api/                  # نقاط النهاية الخلفية
-│   │       ├── auth/route.ts
-│   │       ├── lessons/route.ts
-│   │       ├── upload/route.ts
-│   │       ├── honors/route.ts
-│   │       ├── summons/route.ts
-│   │       ├── penalties/route.ts
-│   │       ├── evaluations/route.ts
-│   │       ├── announcements/route.ts
-│   │       └── messages/route.ts
-│   ├── components/               # مكونات واجهة المستخدم
-│   │   ├── TeacherWallet.tsx     # محفظة معلمي أبنائي للولي
-│   │   ├── SaveToWalletButton.tsx# زر الحفظ السريع في المحفظة
-│   │   ├── PWAInstallBanner.tsx  # شريط تثبيت المنصة على الهاتف
-│   │   ├── ServiceWorkerRegister.tsx # تسجيل Service Worker للتصفح الأوفلاين
-│   │   └── ui.tsx                # عناصر الواجهة المساعدة
-│   └── lib/                      # المكتبات والأنواع المشتركة
-│       ├── supabase.ts           # تهيئة عميل Supabase وتوابع الروابط الموقعة
-│       ├── types.ts              # نماذج البيانات الموحدة (TypeScript Types)
-│       ├── auth.ts               # جلسات العمل والمصادقة
-│       └── storage.ts            # إدارة الملفات المحلية والسحابية
-├── supabase/
-│   └── wilaya_schema.sql         # سكريبت إنشاء جداول قاعدة البيانات والسياسات
-├── README.md                     # التقديم العام والمشروع
-├── DEVELOPER_HANDOVER_GUIDE.md   # هذا الدليل الشامل للمطور
-├── DATABASE_SCHEMA.md            # معمارية قاعدة البيانات وتفصيل الجداول
-├── FEATURES_SPECIFICATION.md     # المواصفات الوظيفية التفصيلية
-└── ROADMAP_MASTER_PLATFORM.md    # خارطة الطريق التطويرية
-```
+شجرة المجلدات المحدثة موجودة في [README.md](./README.md#️-البنية-التقنية-للمشروع-tech-stack). أهم الملفات للمطور:
+
+| الملف | الدور |
+| :--- | :--- |
+| `src/lib/supabase.ts` | عميل Supabase: في المتصفح يحفظ الجلسة في الكوكيز (`@supabase/ssr`)، وعلى الخادم عميل عام للقراءة |
+| `src/lib/auth.ts` | `requireTeacher()` (الأستاذ المسجل) و`resolveReader(req)` (قارئ عام بـ `?teacher=<id>`) |
+| `src/lib/storage.ts` | قراءة/حفظ فضاء الأستاذ (`teacher_public_data` + `teacher_private_data`) ورفع الصور إلى Supabase Storage |
+| `src/lib/teacherParam.ts` | تمرير `?teacher=<id>` في صفحات الولي وروابطها |
+| `src/lib/compress.ts` | ضغط الصور والتحقق من الملفات قبل الرفع |
+| `src/lib/supabaseAdmin.ts` | عميل `service_role` (خادم فقط) لإنشاء/حذف الحسابات |
+| `supabase/migrations/` | كل تغيير على قاعدة البيانات يُضاف كملف ترحيل جديد مرتب |
 
 ---
 
@@ -105,7 +72,14 @@ math-wilaya-eloued/
 3. يدخل **المشرف العام** إلى `/super-admin`.
 4. يجد حساب الأستاذ، ويضغط على زر **«👑 ترقية إلى مفتش»**، ويحدد المقاطعة التفتيشية التابعة له (1 إلى 5).
 5. يتم تحديث جدول `profiles` ليصبح `role = 'inspector'` وتُحدد `district_id`.
-6. عند تسجيل دخوله التالي عبر `/login`، يوجهه النظام تلقائياً إلى لوحة المفتش `/inspector`.
+6. عند تسجيل دخوله التالي عبر `/login`، يوجهه النظام تلقائياً إلى لوحة المفتش `/inspector` (والمشرف إلى `/super-admin`).
+7. **بديل:** ينشئ المشرف حساب المفتش مباشرة من `/super-admin` (يتطلب `SUPABASE_SERVICE_ROLE_KEY`)، بكلمة مرور مؤقتة يغيرها المفتش من `/settings`.
+
+### 🧱 كيف تصل البيانات إلى الصفحات؟ (سياق الأستاذ)
+- **الأستاذ** يدخل بحسابه (لا توجد كلمة مرور مشتركة). نقاط النهاية `/api/*` تقرأ جلسته من الكوكيز عبر `requireTeacher()` وتعمل على **فضائه هو فقط**؛ قاعدة البيانات (RLS) تمنع أي كتابة في فضاء غيره.
+- **الولي والتلميذ** بدون حساب: صفحات `/year`، `/lesson`، `/honor`، `/parents`، `/messages`، `/announcement` تأخذ الأستاذ من الرابط `?teacher=<id>` (تمرره صفحة `/t/[slug]` تلقائياً)، وتقرأ **البيانات العامة فقط**.
+- **الحساب المعلق** (`is_verified = false`) لا يستطيع الكتابة، ويختفي من البحث العام.
+- **ترحيل الموقع القديم:** عند أول دخول للأستاذ صاحب البريد `LEGACY_OWNER_EMAIL` وفضاؤه فارغ، تُنسخ بيانات `lessons-db.json` القديمة إلى فضائه.
 
 ---
 
@@ -118,6 +92,8 @@ math-wilaya-eloued/
 - **أقصى أبعاد:** `maxWidthOrHeight: 1600px` (تحافظ على وضوح خط الطباشير/القلم والمعادلات الرياضية).
 - **أقصى حجم:** `maxSizeMB: 0.35` (حوالي 150 إلى 250 كيلوبايت فقط لكل صورة).
 - **النتيجة:** تقليل حجم الصورة بنسبة 95%، وتوفير هائل في استهلاك التخزين وسرعة تحميل فورية حتى على شبكات 3G الضعيفة.
+
+> الإعدادات معرفة مرة واحدة في `src/lib/compress.ts` (`BOARD_IMAGE_OPTIONS`) وتستعملها لوحة الأستاذ والملف البيداغوجي والملتقى. الصور تُحفظ في مخزن `public-lesson-media` داخل مجلد الأستاذ.
 
 ### الرفع الدفعي الذري (Atomic Batch Upload):
 - يتم رفع الصور دفعة واحدة باستخدام `Promise.all` وتحديث الحالة ذرياً (`Atomic State Update`).
@@ -154,6 +130,9 @@ math-wilaya-eloued/
    getPrivateNoteSignedUrl(path: string, expiresInSeconds = 900)
    ```
 3. سياسات Row Level Security (RLS) تضمن أن الأستاذ يرى مذكراته فقط، ومفتش المقاطعة يرى مذكرات أساتذة مقاطعته فقط.
+4. **مسار الملف إلزامي:** `<teacher_id>/<اسم-الملف>` (سياسة التخزين ترفض أي مجلد آخر).
+5. **دورة المراجعة:** `submitted` (قيد المراجعة) ⬅️ المفتش يختار `reviewed` (مصادقة) أو `needs_revision` (تعديل) مع توجيه مكتوب ⬅️ الأستاذ يعيد رفع نسخة معدلة فتعود الحالة `submitted`. الأستاذ لا يستطيع المصادقة على وثيقته بنفسه (محفز في القاعدة).
+6. الواجهات: الأستاذ في `/pedagogy`، والمفتش في `/inspector` (تبويب «فحص الوثائق»).
 
 ---
 
@@ -181,7 +160,7 @@ math-wilaya-eloued/
 
 إذا طُلب منك إضافة ميزة جديدة (مثلاً: منتدى تبادل الخبرات):
 1. **الأنواع (Types):** أضف نوع البيانات في `src/lib/types.ts` مع دعم نمطَي camelCase و snake_case لضمان توافق Supabase.
-2. **قاعدة البيانات (SQL):** أنشئ الجدول وسياسات RLS في `supabase/wilaya_schema.sql` وطبّقها في Supabase SQL Editor.
+2. **قاعدة البيانات (SQL):** أنشئ ملف ترحيل جديداً في `supabase/migrations/` باسم يبدأ بتاريخ أحدث (مثال: `20261101000001_my_feature.sql`)، واجعله آمناً لإعادة التشغيل (`IF NOT EXISTS` و`DROP POLICY IF EXISTS`)، مع سياسات RLS لكل جدول جديد، ثم طبّقه في Supabase SQL Editor.
 3. **الواجهة (UI):** أنشئ المكون في `src/components/` أو الصفحة في `src/app/`.
 4. **التحقق من البناء:** شغّل دائماً:
    ```bash

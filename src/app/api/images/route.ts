@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData, deleteImageFile } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
+import { requireTeacher } from "@/lib/auth";
 
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -17,7 +17,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
   }
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   const lesson = data.lessons.find((l) => l.id === lessonId);
   if (!lesson) {
     return NextResponse.json({ error: "الدرس غير موجود" }, { status: 404 });
@@ -33,16 +33,16 @@ export async function DELETE(req: NextRequest) {
   }
 
   const [removed] = targetList.splice(imgIndex, 1);
-  await deleteImageFile(removed.url);
+  await deleteImageFile(ctx, removed.url);
 
-  await saveLessonsData(data);
+  await saveLessonsData(ctx, data);
   return NextResponse.json({ success: true, lesson });
 }
 
 // إعادة ترتيب صور الدرس
 export async function PUT(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "بيانات ناقصة" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     const lesson = data.lessons.find((l) => l.id === lessonId);
     if (!lesson) {
       return NextResponse.json({ error: "الدرس غير موجود" }, { status: 404 });
@@ -79,7 +79,7 @@ export async function PUT(req: NextRequest) {
     } else {
       lesson.images = reordered;
     }
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, lesson });
   } catch (err: any) {

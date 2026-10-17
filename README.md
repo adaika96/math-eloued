@@ -1,7 +1,7 @@
 # 📐 المنصة الرقمية الموحدة لمادة الرياضيات — ولاية الوادي
 ### الفضاء التعليمي والبيداغوجي المشترك لأساتذة ومفتشي التعليم المتوسط، ونافذة الأولياء والتلاميذ
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.3.8-black?logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38bdf8?logo=tailwind-css)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20Storage-3ecf8e?logo=supabase)](https://supabase.com/)
@@ -53,9 +53,8 @@
 ## 🚀 البدء السريع والتشغيل المحلي (Quick Start)
 
 ### 1. المتطلبات الأساسية
-- **Node.js:** الإصدار 18.18 أو أحدث (يُفضل 20 LTS أو 22).
-- **حزمة إدارة الحزم:** `npm` أو `pnpm`.
-- **حساب Supabase:** مشروع مفعل مع قاعدة بيانات PostgreSQL وStorage Buckets.
+- **Node.js:** الإصدار 20 LTS أو 22.
+- **حساب Supabase:** مشروع مفعل (قاعدة بيانات PostgreSQL + Auth + Storage).
 
 ### 2. تثبيت التبعيات
 ```bash
@@ -64,57 +63,64 @@ cd math-eloued
 npm install
 ```
 
-### 3. إعداد متغيرات البيئة (`.env.local`)
-أنشئ ملفاً باسم `.env.local` في المجلد الرئيسي وضع فيه:
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://taoagpwjytgbjhbtnfps.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-# أو
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
+### 3. إعداد قاعدة البيانات (مرة واحدة)
+في **Supabase > SQL Editor** شغّل الملفات **بهذا الترتيب**:
+1. `supabase/wilaya_schema.sql` — الجداول الأساسية والمقاطعات الخمس (يُتجاوز إن كان مطبقاً مسبقاً).
+2. كل ملفات `supabase/migrations/*.sql` حسب ترتيب أسمائها (من `20261017000001` إلى `20261017000010`).
+
+كل ملفات الترحيل آمنة لإعادة التشغيل. بعدها أنشئ حساب المشرف العام: سجّل كأستاذ عادي ثم نفّذ في SQL Editor:
+```sql
+UPDATE public.profiles SET role = 'admin'
+WHERE id = (SELECT id FROM auth.users WHERE email = 'YOUR_EMAIL');
 ```
 
-### 4. تشغيل خادم التطوير المحلي
-```bash
-npm run dev
-```
-افتح المتصفح على: `http://localhost:3000`
+### 4. متغيرات البيئة (`.env.local`)
+انسخ `.env.example` إلى `.env.local` واملأ القيم:
 
-### 5. بناء المشروع للإنتاج والتحقق من الأنواع
+| المتغير | إلزامي؟ | الاستعمال |
+| :--- | :--- | :--- |
+| `NEXT_PUBLIC_SUPABASE_URL` | نعم | رابط مشروع Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` (أو `..._PUBLISHABLE_KEY`) | نعم | المفتاح العام |
+| `SUPABASE_SERVICE_ROLE_KEY` | اختياري | يفعّل إنشاء حسابات المفتشين وحذف الحسابات من لوحة المشرف (على الخادم فقط — لا تضف له البادئة `NEXT_PUBLIC_`) |
+| `LEGACY_OWNER_EMAIL` | اختياري | بريد حساب الأستاذ الذي تُنقل إليه بيانات الموقع القديم (`lessons-db.json`) تلقائياً عند أول دخول |
+| `BLOB_PRIVATE_READ_WRITE_TOKEN` / `BLOB_READ_WRITE_TOKEN` | اختياري | فقط لقراءة بيانات الموقع القديم أثناء الترحيل ولحذف صوره القديمة |
+
+### 5. التشغيل والبناء
 ```bash
-npm run build
+npm run dev     # http://localhost:3000
+npm run build   # بناء الإنتاج والتحقق من الأنواع
 ```
 
 ---
 
 ## 🛠️ البنية التقنية للمشروع (Tech Stack)
 
+- **Next.js 16** (App Router + Turbopack) • **React 19** • **Tailwind CSS 4** • **TypeScript**
+- **Supabase**: المصادقة (جلسة في الكوكيز عبر `@supabase/ssr`)، PostgreSQL مع RLS، والتخزين.
+- كل أستاذ يملك فضاءه المستقل: `teacher_public_data` (ما يراه الأولياء) و`teacher_private_data` (التقويم والعقوبات والرسائل).
+
 ```
-math-wilaya-eloued/
-├── src/
-│   ├── app/                      # مسارات Next.js 16 App Router
-│   │   ├── page.tsx              # بوابة ولاية الوادي العامة ومحفظة الولي
-│   │   ├── login/                # تسجيل الدخول الموحد (أستاذ / مفتش / مشرف)
-│   │   ├── register/             # انضمام أستاذ جديد واختيار المقاطعة والمستويات
-│   │   ├── admin/                # لوحة قيادة الأستاذ (الكراريس، الواجبات، التقييم)
-│   │   ├── inspector/            # لوحة قيادة مفتش المقاطعة (المذكرات، المناشير)
-│   │   ├── super-admin/          # لوحة المشرف العام لترقية وإدارة الحسابات
-│   │   ├── t/[slug]/             # فضاء الأستاذ العام للأولياء والتلاميذ
-│   │   ├── t/search/             # محرك البحث عن أستاذ بالكود أو الاسم
-│   │   ├── year/[level]/         # عرض دروس وسلاسل السنة الدراسية المحددة
-│   │   ├── lesson/[id]/          # عرض سبورة الدرس والتكبير عالي الدقة
-│   │   └── api/                  # نقاط النهاية الخلفية (Upload, Lessons, etc.)
-│   ├── components/               # مكونات الواجهة التفاعلية
-│   │   ├── TeacherWallet.tsx     # محفظة معلمي أبنائي للولي (LocalStorage)
-│   │   ├── SaveToWalletButton.tsx# زر حفظ المعلم في محفظة الهاتف
-│   │   ├── PWAInstallBanner.tsx  # تثبيت التطبيق كتطبيق هاتف PWA
-│   │   └── ui.tsx                # مكونات UI المشتركة
-│   └── lib/
-│       ├── supabase.ts           # عميل Supabase وإدارة الروابط الموقعة
-│       ├── types.ts              # نماذج البيانات وأنواع TypeScript
-│       └── auth.ts               # مساعدات التحقق والجلسات
-├── supabase/
-│   └── wilaya_schema.sql         # سكريبت المخطط الشامل لقاعدة البيانات وRLS
-└── ROADMAP_MASTER_PLATFORM.md    # وثيقة خارطة الطريق التطويرية
+src/
+├── app/
+│   ├── page.tsx              # بوابة الولاية + محفظة الولي + البحث
+│   ├── login/ register/      # الدخول الموحد (توجيه حسب الدور) وتسجيل الأستاذ
+│   ├── admin/                # لوحة الأستاذ: الكراريس، رفع السبورة، التقويم، الاستدعاءات...
+│   ├── eval/ penalties/      # دفتر التقويم الميداني والعقوبات (خاص بالأستاذ)
+│   ├── pedagogy/             # الملف البيداغوجي: المذكرات والوثائق، مناشير المفتش، جدول التوقيت
+│   ├── settings/             # الملف الشخصي، بطاقة الاستقبال، رمز QR، كلمة المرور
+│   ├── inspector/            # لوحة المفتش: الأساتذة، فحص الوثائق، المناشير والندوات وكشف الاطلاع
+│   ├── super-admin/          # المشرف العام: الحسابات، المتوسطات، إحصائيات الولاية
+│   ├── forum/                # ملتقى الأساتذة وبنك الوضعيات (نقاط وشارات)
+│   ├── t/[slug]/             # فضاء الأستاذ العام للأولياء (+ QR + خدمات الولي)
+│   ├── t/search/ t/schools/  # البحث بالكود/الاسم أو حسب المقاطعة ⬅️ المتوسطة
+│   ├── year/[level]/ lesson/[id]/  # دروس الأستاذ (?teacher=<id>) للمستويات 1 إلى 4
+│   ├── honor/ parents/ announcement/ messages/  # لوحة الشرف، الاستدعاءات، الاستقبال، رسالة سرية
+│   └── api/                  # نقاط النهاية (كل كتابة تتطلب جلسة الأستاذ؛ القراءة العامة بـ ?teacher=)
+├── components/               # المحفظة، QR، الإشعارات، تغيير كلمة المرور...
+└── lib/                      # supabase, auth (سياق الأستاذ), storage (فضاء الأستاذ), compress, rateLimit
+supabase/
+├── wilaya_schema.sql         # المخطط الأساسي
+└── migrations/               # الترحيلات المرتبة (الأمن، الفضاءات، الملف البيداغوجي، الملتقى...)
 ```
 
 ---
@@ -122,10 +128,11 @@ math-wilaya-eloued/
 ## 🌐 النشر على Vercel (Production Deployment)
 
 1. اربط مستودع GitHub مع [Vercel](https://vercel.com).
-2. في إعدادات المشروع **Settings > Environment Variables**، أضف:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3. قم بعمل Deploy، وستعمل المنصة مباشرة مع دعم شهادات SSL والتوزيع الجغرافي السريع CDN.
+2. أضف متغيرات البيئة من الجدول أعلاه في **Settings > Environment Variables**.
+3. طبّق ملفات قاعدة البيانات (الخطوة 3) على مشروع Supabase الإنتاجي قبل النشر.
+4. انشر. المنصة تعمل كتطبيق PWA قابل للتثبيت على الهاتف.
+
+> 🔒 بعد ترحيل بيانات الموقع القديم: احذف الملف العام `lessons-db.json` من مخزن Vercel Blob العام (كان يكشف بيانات التلاميذ).
 
 ---
 

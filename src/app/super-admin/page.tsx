@@ -25,6 +25,9 @@ import {
   Lock,
 } from "lucide-react";
 import { UserProfile } from "@/lib/types";
+import { CreateInspectorForm } from "./CreateInspectorForm";
+import { SchoolsManager } from "./SchoolsManager";
+import { WilayaStats } from "./WilayaStats";
 
 const DISTRICTS_INFO: Record<number, string> = {
   1: "المقاطعة 1 — الوادي 1",
@@ -46,6 +49,7 @@ export default function SuperAdminPage() {
   const [districtFilter, setDistrictFilter] = useState<number | "all">("all");
   const [toast, setToast] = useState<ToastState>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"accounts" | "schools" | "stats">("accounts");
   const [confirmAction, setConfirmAction] = useState<{
     userId: string;
     userName: string;
@@ -102,10 +106,12 @@ export default function SuperAdminPage() {
   /* ─── ترقية حساب إلى مفتش ─── */
   const upgradeToInspector = async (userId: string, districtId: number) => {
     setBusyId(userId);
-    const { error } = await supabase
+    const { data: changed, error: updateError } = await supabase
       .from("profiles")
       .update({ role: "inspector", district_id: districtId })
-      .eq("id", userId);
+      .eq("id", userId)
+      .select("id");
+    const error = updateError ?? (changed?.length ? null : { message: "لم يتم تعديل أي حساب (صلاحيات غير كافية)" });
 
     if (error) {
       showToast("error", "فشل ترقية الحساب: " + error.message);
@@ -120,10 +126,12 @@ export default function SuperAdminPage() {
   /* ─── تخفيض حساب إلى أستاذ ─── */
   const downgradeToTeacher = async (userId: string) => {
     setBusyId(userId);
-    const { error } = await supabase
+    const { data: changed, error: updateError } = await supabase
       .from("profiles")
       .update({ role: "teacher" })
-      .eq("id", userId);
+      .eq("id", userId)
+      .select("id");
+    const error = updateError ?? (changed?.length ? null : { message: "لم يتم تعديل أي حساب (صلاحيات غير كافية)" });
 
     if (error) {
       showToast("error", "فشل تخفيض الصلاحية: " + error.message);
@@ -138,10 +146,12 @@ export default function SuperAdminPage() {
   /* ─── تعليق/تفعيل حساب ─── */
   const toggleVerified = async (user: UserProfile) => {
     setBusyId(user.id);
-    const { error } = await supabase
+    const { data: changed, error: updateError } = await supabase
       .from("profiles")
       .update({ is_verified: !user.is_verified })
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .select("id");
+    const error = updateError ?? (changed?.length ? null : { message: "لم يتم التعديل" });
 
     if (error) {
       showToast("error", "حدث خطأ");
@@ -150,6 +160,22 @@ export default function SuperAdminPage() {
       await loadProfiles();
     }
     setBusyId(null);
+  };
+
+  /* ─── حذف حساب نهائياً ─── */
+  const deleteUser = async (userId: string) => {
+    setBusyId(userId);
+    try {
+      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(userId)}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "تعذر حذف الحساب");
+      showToast("success", "تم حذف الحساب نهائياً");
+      await loadProfiles();
+    } catch (e: any) {
+      showToast("error", e.message);
+    }
+    setBusyId(null);
+    setConfirmAction(null);
   };
 
   /* ─── الفلترة ─── */
@@ -228,8 +254,9 @@ export default function SuperAdminPage() {
                   : "حذف الحساب"}
               </h3>
               <p className="text-xs text-slate-600">
-                هل أنت متأكد من تغيير دور{" "}
-                <span className="font-bold">{confirmAction.userName}</span>؟
+                {confirmAction.action === "delete_user" ? "حذف نهائي لحساب " : "هل أنت متأكد من تغيير دور "}
+                <span className="font-bold">{confirmAction.userName}</span>
+                {confirmAction.action === "delete_user" ? " وكل دروسه ووثائقه؟ لا يمكن التراجع." : "؟"}
               </p>
             </div>
 
@@ -273,6 +300,8 @@ export default function SuperAdminPage() {
                     );
                   } else if (confirmAction.action === "downgrade_teacher") {
                     downgradeToTeacher(confirmAction.userId);
+                  } else {
+                    deleteUser(confirmAction.userId);
                   }
                 }}
                 className={`flex-1 py-2.5 rounded-xl font-bold text-sm text-white transition flex items-center justify-center gap-2 ${
@@ -304,6 +333,15 @@ export default function SuperAdminPage() {
             >
               <ArrowRight className="w-3.5 h-3.5" />
               الصفحة الرئيسية
+            </Link>
+            <Link href="/forum" className="inline-flex items-center gap-1 text-xs text-indigo-200 hover:text-white transition bg-white/10 px-3 py-1.5 rounded-full">
+              💬 الملتقى
+            </Link>
+            <Link href="/inspector" className="inline-flex items-center gap-1 text-xs text-indigo-200 hover:text-white transition bg-white/10 px-3 py-1.5 rounded-full">
+              🛡️ لوحة المقاطعات
+            </Link>
+            <Link href="/settings" className="inline-flex items-center gap-1 text-xs text-indigo-200 hover:text-white transition bg-white/10 px-3 py-1.5 rounded-full">
+              ⚙️ حسابي
             </Link>
             <button
               onClick={async () => {
@@ -350,6 +388,29 @@ export default function SuperAdminPage() {
 
       {/* ─── المحتوى الرئيسي ─── */}
       <div className="max-w-4xl mx-auto px-4 -mt-6 space-y-4 relative z-10">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow p-1 grid grid-cols-3 gap-1">
+          {(
+            [
+              ["accounts", "الحسابات"],
+              ["schools", "المتوسطات"],
+              ["stats", "إحصائيات الولاية"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`py-2 rounded-xl text-xs font-bold ${tab === id ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "schools" && <SchoolsManager />}
+        {tab === "stats" && <WilayaStats profiles={profiles} />}
+        {tab === "accounts" && <CreateInspectorForm onCreated={loadProfiles} />}
+
+        {tab === "accounts" && (<>
         {/* شريط البحث والفلترة */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50 p-4 space-y-3">
           <div className="relative">
@@ -442,10 +503,12 @@ export default function SuperAdminPage() {
                   })
                 }
                 onToggleVerified={toggleVerified}
+                onDelete={(userId, userName) => setConfirmAction({ userId, userName, action: "delete_user" })}
               />
             ))
           )}
         </div>
+        </>)}
       </div>
     </div>
   );
@@ -458,12 +521,14 @@ function ProfileCard({
   onUpgrade,
   onDowngrade,
   onToggleVerified,
+  onDelete,
 }: {
   profile: UserProfile;
   busyId: string | null;
   onUpgrade: (id: string, name: string) => void;
   onDowngrade: (id: string, name: string) => void;
   onToggleVerified: (profile: UserProfile) => void;
+  onDelete: (id: string, name: string) => void;
 }) {
   const isBusy = busyId === profile.id;
   const roleBadge =
@@ -591,6 +656,18 @@ function ProfileCard({
                 تفعيل الحساب
               </>
             )}
+          </button>
+        )}
+
+        {/* حذف نهائي */}
+        {profile.role !== "admin" && (
+          <button
+            disabled={isBusy}
+            onClick={() => onDelete(profile.id, profile.full_name || "؟")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-500 hover:bg-red-50 hover:text-red-600 text-xs font-bold transition"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            حذف
           </button>
         )}
 

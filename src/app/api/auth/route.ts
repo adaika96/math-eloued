@@ -1,25 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getAdminPassword, setAdminSession, clearAdminSession, verifyAdminSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { getSessionProfile } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
+// حالة الجلسة الحالية (حساب Supabase): يستعملها فضاء الأستاذ للتحقق من الدخول
 export async function GET() {
-  const isAuth = await verifyAdminSession();
-  return NextResponse.json({ authenticated: isAuth });
+  const { user, profile } = await getSessionProfile();
+  const isTeacher = Boolean(user && profile && (profile.role === "teacher" || profile.role === "admin"));
+  return NextResponse.json(
+    {
+      authenticated: isTeacher,
+      role: profile?.role ?? null,
+      profile: isTeacher ? profile : null,
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const { password } = await req.json();
-    if (!password || password !== getAdminPassword()) {
-      return NextResponse.json({ error: "كلمة المرور غير صحيحة" }, { status: 401 });
-    }
-    await setAdminSession();
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "طلب غير صالح" }, { status: 400 });
-  }
-}
-
+// تسجيل الخروج (مسح كوكيز الجلسة)
 export async function DELETE() {
-  await clearAdminSession();
+  const { supabase } = await getSessionProfile();
+  await supabase.auth.signOut();
   return NextResponse.json({ success: true });
 }

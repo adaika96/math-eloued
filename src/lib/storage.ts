@@ -1,34 +1,16 @@
-import { put, del, list, get } from "@vercel/blob";
+import { del, get } from "@vercel/blob";
 import fs from "fs/promises";
 import path from "path";
-import { Lesson, LessonsData } from "./types";
+import { randomBytes } from "crypto";
+import { LessonsData } from "./types";
+import type { TeacherContext } from "./auth";
+import { BUCKETS } from "./supabase";
 
-const LOCAL_DATA_DIR = path.join(process.cwd(), "data");
-const LOCAL_DATA_FILE = path.join(LOCAL_DATA_DIR, "lessons.json");
+const LOCAL_DATA_FILE = path.join(process.cwd(), "data", "lessons.json");
 const LOCAL_UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
 export function getBlobToken(): string | undefined {
   return process.env.BLOB_READ_WRITE_TOKEN;
-}
-
-export function isVercelBlobConfigured(): boolean {
-  return Boolean(getBlobToken());
-}
-
-// Ensure local folders exist
-async function ensureLocalDirs() {
-  await fs.mkdir(LOCAL_DATA_DIR, { recursive: true });
-  await fs.mkdir(LOCAL_UPLOADS_DIR, { recursive: true });
-}
-
-// Mutex lock to serialize writes and prevent concurrent race conditions
-let writeQueue: Promise<any> = Promise.resolve();
-
-// استخراج الطابع الزمني الرقمي من مسار النسخة db/v-123456.json
-function getVersionTs(pathname: string, uploadedAt?: string | Date): number {
-  const match = pathname.match(/v-(\d+)\.json/);
-  if (match) return Number(match[1]);
-  return uploadedAt ? new Date(uploadedAt).getTime() : 0;
 }
 
 // مزامنة تامة ومتبادلة بين قائمة تلاميذ القسم (studentRoster) وسجلات التقويم (evaluations)
@@ -90,84 +72,120 @@ export function synchronizeStudents(data: LessonsData): LessonsData {
   return data;
 }
 
-const FIXED_BLOB_DB_URL = "https://zcvevxcbfufx3f96.public.blob.vercel-storage.com/lessons-db.json";
+// ==========================================================
+// فضاء كل أستاذ في Supabase (teacher_public_data / teacher_private_data)
+// ==========================================================
 
-// ----------------- قراءة بيانات الدروس -----------------
-export async function getLessonsData(): Promise<LessonsData> {
-  const token = getBlobToken();
+// ما يراه الأولياء والتلاميذ
+const PUBLIC_KEYS = ["lessons", "honors", "announcements", "summons"] as const;
+// ما يبقى خاصاً بالأستاذ وحده
+const PRIVATE_KEYS = ["evaluations", "penalties", "inspectionSessions", "studentRoster", "anonymousMessages"] as const;
 
-  if (token) {
-    try {
-      // قراءة مباشرة وفورية للملف الثابت lessons-db.json دون استهلاك أي Advanced Requests (list)
-      const res = await fetch(`${FIXED_BLOB_DB_URL}?_t=${Date.now()}`, {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
-      });
+export function normalizeData(json: any): LessonsData {
+  return {
+    lessons: Array.isArray(json?.lessons) ? json.lessons : [],
+    summons: Array.isArray(json?.summons) ? json.summons : [],
+    honors: Array.isArray(json?.honors) ? json.honors : [],
+    penalties: Array.isArray(json?.penalties) ? json.penalties : [],
+    evaluations: Array.isArray(json?.evaluations) ? json.evaluations : [],
+    inspectionSessions: Array.isArray(json?.inspectionSessions) ? json.inspectionSessions : [],
+    studentRoster: Array.isArray(json?.studentRoster) ? json.studentRoster : [],
+    announcements: Array.isArray(json?.announcements) ? json.announcements : [],
+    anonymousMessages: Array.isArray(json?.anonymousMessages) ? json.anonymousMessages : [],
+  };
+}
 
-      if (res.ok) {
-        const json = await res.json();
-        const rawResult: LessonsData = {
-          lessons: Array.isArray(json.lessons) ? json.lessons : [],
-          summons: Array.isArray(json.summons) ? json.summons : [],
-          honors: Array.isArray(json.honors) ? json.honors : [],
-          penalties: Array.isArray(json.penalties) ? json.penalties : [],
-          evaluations: Array.isArray(json.evaluations) ? json.evaluations : [],
-          inspectionSessions: Array.isArray(json.inspectionSessions) ? json.inspectionSessions : [],
-          studentRoster: Array.isArray(json.studentRoster) ? json.studentRoster : [],
-          announcements: Array.isArray(json.announcements) ? json.announcements : [],
-          anonymousMessages: Array.isArray(json.anonymousMessages) ? json.anonymousMessages : [],
-        };
-        const result = synchronizeStudents(rawResult);
-        // حفظ نسخة محلية احتياطية
-        ensureLocalDirs()
-          .then(() => fs.writeFile(LOCAL_DATA_FILE, JSON.stringify(result, null, 2), "utf-8"))
-          .catch(() => {});
-        return result;
-      }
-    } catch (fetchErr) {
-      console.warn("Direct blob fetch failed, falling back to local file:", fetchErr);
-    }
-  }
+function pick(data: LessonsData, keys: readonly string[]) {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) out[k] = (data as any)[k] ?? [];
+  return out;
+}
 
-  // Local fallback
+async function readRow(ctx: TeacherContext, table: "teacher_public_data" | "teacher_private_data") {
+  const { data, error } = await ctx.supabase
+    .from(table)
+    .select("data")
+    .eq("teacher_id", ctx.teacherId)
+    .maybeSingle();
+  if (error) throw new Error(`${table}: ${error.message}`);
+  return data ? (data.data as Record<string, unknown>) : null;
+}
+
+// ----------------- ترحيل بيانات الموقع القديم (lessons-db.json) لمرة واحدة -----------------
+// يُستورد فقط لحساب الأستاذ صاحب البريد LEGACY_OWNER_EMAIL عند أول دخول وفضاؤه فارغ
+const LEGACY_PUBLIC_DB_URL = "https://zcvevxcbfufx3f96.public.blob.vercel-storage.com/lessons-db.json";
+
+async function loadLegacyData(): Promise<LessonsData | null> {
+  const privateToken = process.env.BLOB_PRIVATE_READ_WRITE_TOKEN;
   try {
-    await ensureLocalDirs();
-    const data = await fs.readFile(LOCAL_DATA_FILE, "utf-8");
-    const json = JSON.parse(data);
-    return {
-      lessons: Array.isArray(json.lessons) ? json.lessons : [],
-      summons: Array.isArray(json.summons) ? json.summons : [],
-      honors: Array.isArray(json.honors) ? json.honors : [],
-      penalties: Array.isArray(json.penalties) ? json.penalties : [],
-      evaluations: Array.isArray(json.evaluations) ? json.evaluations : [],
-      inspectionSessions: Array.isArray(json.inspectionSessions) ? json.inspectionSessions : [],
-      studentRoster: Array.isArray(json.studentRoster) ? json.studentRoster : [],
-      announcements: Array.isArray(json.announcements) ? json.announcements : [],
-      anonymousMessages: Array.isArray(json.anonymousMessages) ? json.anonymousMessages : [],
-    };
+    if (privateToken) {
+      const result = await get("lessons-db.json", { access: "private", token: privateToken, useCache: false });
+      if (result && result.statusCode === 200) return normalizeData(await new Response(result.stream).json());
+    }
+    if (getBlobToken()) {
+      const res = await fetch(`${LEGACY_PUBLIC_DB_URL}?_t=${Date.now()}`, { cache: "no-store" });
+      if (res.ok) return normalizeData(await res.json());
+    }
+  } catch (e) {
+    console.warn("Legacy blob import failed:", e);
+  }
+  try {
+    return normalizeData(JSON.parse(await fs.readFile(LOCAL_DATA_FILE, "utf-8")));
   } catch {
-    return {
-      lessons: [],
-      summons: [],
-      honors: [],
-      penalties: [],
-      evaluations: [],
-      inspectionSessions: [],
-      studentRoster: [],
-      announcements: [],
-      anonymousMessages: [],
-    };
+    return null;
   }
 }
 
-// ----------------- حفظ بيانات الدروس -----------------
-async function executeSave(data: LessonsData): Promise<void> {
+function isLegacyOwner(ctx: TeacherContext) {
+  const owner = process.env.LEGACY_OWNER_EMAIL?.trim().toLowerCase();
+  return Boolean(owner && ctx.email && ctx.email.toLowerCase() === owner);
+}
+
+// القراءة العامة عبر دالة قاعدة البيانات التي تحجب الحل النموذجي قبل موعد نشره
+export async function readPublicTeacherData(supabase: TeacherContext["supabase"], teacherId: string): Promise<LessonsData> {
+  const { data, error } = await supabase.rpc("get_teacher_public_data", { p_teacher_id: teacherId });
+  if (error) throw new Error(`get_teacher_public_data: ${error.message}`);
+  return normalizeData(data ?? {});
+}
+
+// ----------------- قراءة بيانات الأستاذ -----------------
+export async function getLessonsData(ctx: TeacherContext): Promise<LessonsData> {
+  if (ctx.mode === "public") {
+    return readPublicTeacherData(ctx.supabase, ctx.teacherId);
+  }
+  const publicData = await readRow(ctx, "teacher_public_data");
+
+  const privateData = await readRow(ctx, "teacher_private_data");
+  if (!publicData && !privateData && isLegacyOwner(ctx)) {
+    const legacy = await loadLegacyData();
+    if (legacy) {
+      synchronizeStudents(legacy);
+      await writeRows(ctx, legacy);
+      return legacy;
+    }
+  }
+  return synchronizeStudents(normalizeData({ ...(publicData ?? {}), ...(privateData ?? {}) }));
+}
+
+async function writeRows(ctx: TeacherContext, data: LessonsData) {
+  const now = new Date().toISOString();
+  const [pub, priv] = await Promise.all([
+    ctx.supabase
+      .from("teacher_public_data")
+      .upsert({ teacher_id: ctx.teacherId, data: pick(data, PUBLIC_KEYS), updated_at: now }),
+    ctx.supabase
+      .from("teacher_private_data")
+      .upsert({ teacher_id: ctx.teacherId, data: pick(data, PRIVATE_KEYS), updated_at: now }),
+  ]);
+  if (pub.error) throw new Error(`teacher_public_data: ${pub.error.message}`);
+  if (priv.error) throw new Error(`teacher_private_data: ${priv.error.message}`);
+}
+
+// ----------------- حفظ بيانات الأستاذ -----------------
+async function executeSave(ctx: TeacherContext, data: LessonsData): Promise<void> {
   // دمج وقائي صارم لمنع فقدان الدروس أو التلاميذ عند حدوث أي خطأ في الكاش
   try {
-    const existing = await getLessonsData();
+    const existing = await getLessonsData(ctx);
     if ((!data.lessons || data.lessons.length === 0) && existing.lessons && existing.lessons.length > 0) {
       data.lessons = existing.lessons;
     }
@@ -191,86 +209,63 @@ async function executeSave(data: LessonsData): Promise<void> {
   }
 
   synchronizeStudents(data);
-  const token = getBlobToken();
-
-  if (token) {
-    const payload = JSON.stringify(data, null, 2);
-
-    // تحديث مباشر للملف lessons-db.json دون استهلاك طلبات list أو del متقدمة
-    try {
-      await put("lessons-db.json", payload, {
-        access: "public",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        token,
-      });
-    } catch (saveErr) {
-      console.error("Vercel Blob put error on lessons-db.json:", saveErr);
-    }
-
-    // حفظ نسخة محلية أيضاً للأمان
-    ensureLocalDirs()
-      .then(() => fs.writeFile(LOCAL_DATA_FILE, payload, "utf-8"))
-      .catch(() => {});
-
-    return;
-  }
-
-  // Local fallback
-  await ensureLocalDirs();
-  await fs.writeFile(LOCAL_DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
+  await writeRows(ctx, data);
 }
 
-export function saveLessonsData(data: LessonsData): Promise<void> {
-  const next = writeQueue.then(() => executeSave(data));
-  writeQueue = next.catch(() => {});
+// طابور كتابة لكل أستاذ لمنع تداخل الحفظ المتزامن
+const writeQueues = new Map<string, Promise<unknown>>();
+
+export function saveLessonsData(ctx: TeacherContext, data: LessonsData): Promise<void> {
+  if (ctx.mode !== "owner") {
+    return Promise.reject(new Error("غير مصرح بتعديل بيانات أستاذ آخر"));
+  }
+  const prev = writeQueues.get(ctx.teacherId) ?? Promise.resolve();
+  const next = prev.then(() => executeSave(ctx, data));
+  writeQueues.set(ctx.teacherId, next.catch(() => {}));
   return next;
 }
 
-// ----------------- رفع صورة -----------------
+// ----------------- رفع صورة / ملف إلى مخزن Supabase العام -----------------
 export async function uploadImageFile(
+  ctx: TeacherContext,
   file: File | Blob,
   fileName: string,
   lessonId: string,
   level: number
 ): Promise<{ url: string; downloadUrl: string }> {
   const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const uniqueName = `${Date.now()}-${safeName}`;
-  const token = getBlobToken();
+  const uniqueName = `${Date.now()}-${randomBytes(12).toString("hex")}-${safeName}`;
+  // المجلد الأول = معرّف الأستاذ (تفرضه سياسة التخزين)
+  const objectPath = `${ctx.teacherId}/lessons/${level}/${lessonId}/${uniqueName}`;
+  const bucket = ctx.supabase.storage.from(BUCKETS.PUBLIC_LESSONS);
 
-  if (token) {
-    const blobPath = `lessons/${level}/${lessonId}/${uniqueName}`;
-    const blob = await put(blobPath, file, {
-      access: "public",
-      token,
-    });
-    return {
-      url: blob.url,
-      downloadUrl: blob.downloadUrl || blob.url,
-    };
-  }
+  const { error } = await bucket.upload(objectPath, file, {
+    contentType: (file as File).type || undefined,
+    upsert: false,
+  });
+  if (error) throw new Error(`فشل رفع الملف: ${error.message}`);
 
-  // Local fallback
-  await ensureLocalDirs();
-  const lessonUploadDir = path.join(LOCAL_UPLOADS_DIR, String(level), lessonId);
-  await fs.mkdir(lessonUploadDir, { recursive: true });
-
-  const filePath = path.join(lessonUploadDir, uniqueName);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(filePath, buffer);
-
-  const localUrl = `/uploads/${level}/${lessonId}/${uniqueName}`;
   return {
-    url: localUrl,
-    downloadUrl: localUrl,
+    url: bucket.getPublicUrl(objectPath).data.publicUrl,
+    downloadUrl: bucket.getPublicUrl(objectPath, { download: safeName }).data.publicUrl,
   };
 }
 
 // ----------------- حذف صورة -----------------
-export async function deleteImageFile(url: string): Promise<void> {
-  const token = getBlobToken();
+const SUPABASE_PUBLIC_MARKER = `/storage/v1/object/public/${BUCKETS.PUBLIC_LESSONS}/`;
 
-  if (token && url.startsWith("http")) {
+export async function deleteImageFile(ctx: TeacherContext, url: string): Promise<void> {
+  const markerIndex = url.indexOf(SUPABASE_PUBLIC_MARKER);
+  if (markerIndex !== -1) {
+    const objectPath = decodeURIComponent(url.slice(markerIndex + SUPABASE_PUBLIC_MARKER.length).split("?")[0]);
+    const { error } = await ctx.supabase.storage.from(BUCKETS.PUBLIC_LESSONS).remove([objectPath]);
+    if (error) console.error("Error deleting storage object:", error);
+    return;
+  }
+
+  // صور قديمة على Vercel Blob (الموقع الأصلي)
+  const token = getBlobToken();
+  if (token && url.includes(".blob.vercel-storage.com/")) {
     try {
       await del(url, { token });
     } catch (e) {
@@ -279,12 +274,10 @@ export async function deleteImageFile(url: string): Promise<void> {
     return;
   }
 
-  // Local fallback
+  // صور محلية قديمة
   if (url.startsWith("/uploads/")) {
     try {
-      const relPath = url.replace("/uploads/", "");
-      const fullPath = path.join(LOCAL_UPLOADS_DIR, relPath);
-      await fs.unlink(fullPath);
+      await fs.unlink(path.join(LOCAL_UPLOADS_DIR, url.replace("/uploads/", "")));
     } catch (e) {
       console.error("Error deleting local file:", e);
     }

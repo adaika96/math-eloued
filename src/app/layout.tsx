@@ -3,10 +3,11 @@ import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { TeacherAccess } from "@/components/TeacherAccess";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
+import { AppShell } from "@/components/AppShell";
 
 export const metadata: Metadata = {
-  title: "دروس الرياضيات | الأستاذ محمد عدايكة",
-  description: "دروس الرياضيات للسنة الأولى والثانية متوسط ودفتر التقييم الميداني السريع - متوسطة باهي علي",
+  title: "منصة رياضيات ولاية الوادي",
+  description: "المنصة الرقمية الموحدة لمادة الرياضيات في التعليم المتوسط — ولاية الوادي: دروس وسبورة الأساتذة للأولياء والتلاميذ، وفضاء بيداغوجي مع مفتشي المقاطعات.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "رياضيات عدايكة",
+    title: "رياضيات الوادي",
   },
 };
 
@@ -45,12 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ServiceWorkerRegister />
         <TeacherAccess />
         <PWAInstallBanner />
-        <div className="mx-auto max-w-xl min-h-screen flex flex-col">
-          <main className="flex-1 px-3 sm:px-4 pb-10">{children}</main>
-          <footer className="text-center text-xs text-slate-400 py-4">
-            الأستاذ محمد عدايكة — متوسطة باهي علي
-          </footer>
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

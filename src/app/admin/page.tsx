@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import imageCompression from "browser-image-compression";
 import Link from "next/link";
+import { LoginRequired } from "@/components/LoginRequired";
+import { withTeacher } from "@/lib/teacherParam";
+import { PedagogyAlerts } from "@/components/PedagogyAlerts";
+import { BOARD_IMAGE_OPTIONS } from "@/lib/compress";
 import {
   Plus,
   Trash2,
@@ -13,6 +17,8 @@ import {
   Pencil,
   X,
   ExternalLink,
+  ShieldCheck,
+  Settings,
   Lock,
   ArrowRight,
   ArrowLeft,
@@ -70,13 +76,24 @@ import {
   type MessageCategory,
 } from "@/lib/types";
 
+export type TeacherSession = {
+  id: string;
+  full_name: string | null;
+  slug: string | null;
+  teacher_code: string | null;
+  school_custom_name: string | null;
+  levels_taught: number[] | null;
+};
+
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [profile, setProfile] = useState<TeacherSession | null>(null);
 
   const checkAuth = useCallback(async () => {
     try {
       const res = await fetch("/api/auth");
       const data = await res.json();
+      setProfile(data.profile ?? null);
       setAuthenticated(Boolean(data.authenticated));
     } catch {
       setAuthenticated(false);
@@ -95,76 +112,22 @@ export default function AdminPage() {
     );
   }
 
-  return authenticated ? (
-    <Dashboard onLogout={() => setAuthenticated(false)} />
+  return authenticated && profile ? (
+    <Dashboard profile={profile} onLogout={() => setAuthenticated(false)} />
   ) : (
-    <Login onLogin={() => setAuthenticated(true)} />
-  );
-}
-
-/* ---------------- 1. تسجيل الدخول ---------------- */
-function Login({ onLogin }: { onLogin: () => void }) {
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setErr("");
-    try {
-      const res = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        onLogin();
-      } else {
-        setErr(data.error || "كلمة المرور غير صحيحة");
-      }
-    } catch {
-      setErr("تعذر الاتصال بالخادم");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="pt-16 max-w-sm mx-auto space-y-4 fade-up">
-      <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
-        <Lock className="w-6 h-6" />
-      </div>
-      <h1 className="text-xl font-black text-center text-slate-800">لوحة تحكم الأستاذ</h1>
-      <p className="text-xs text-center text-slate-500">أدخل كلمة المرور لإدارة الدروس ورفع الصور</p>
-
-      <input
-        className="input text-center"
-        type="password"
-        placeholder="كلمة المرور الخاصة بالأستاذ..."
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-        dir="ltr"
-        autoFocus
-      />
-      {err && <p className="text-xs text-center text-red-600 font-bold">{err}</p>}
-
-      <button disabled={busy} className="btn-primary w-full">
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "دخول إلى لوحة التحكم"}
-      </button>
-      <style>{inputCss}</style>
-    </form>
+    <LoginRequired next="/admin" title="لوحة تحكم الأستاذ" />
   );
 }
 
 /* ---------------- 2. لوحة التحكم الرئيسية ---------------- */
-function Dashboard({ onLogout }: { onLogout: () => void }) {
+function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: () => void }) {
+  const levelsTaught = (
+    profile.levels_taught && profile.levels_taught.length > 0 ? profile.levels_taught : [1, 2, 3, 4]
+  ).filter((lv): lv is 1 | 2 | 3 | 4 => [1, 2, 3, 4].includes(lv));
   const [mainTab, setMainTab] = useState<
     "lessons" | "summons" | "honors" | "evaluations" | "penalties" | "announcements" | "messages"
   >("lessons");
-  const [level, setLevel] = useState<1 | 2>(1);
+  const [level, setLevel] = useState<1 | 2 | 3 | 4>(levelsTaught[0] ?? 1);
   const [notebookTab, setNotebookTab] = useState<NotebookType>("lessons");
   const [allLessons, setAllLessons] = useState<Lesson[]>([]);
   const [summonsList, setSummonsList] = useState<ParentSummons[]>([]);
@@ -1096,21 +1059,32 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-base font-extrabold text-slate-800">لوحة تحكم الأستاذ محمد عدايكة</h1>
-            <p className="text-[11px] text-emerald-700 font-bold">متوسطة المجاهد باهي علي — مادة الرياضيات</p>
+            <h1 className="text-base font-extrabold text-slate-800">لوحة تحكم {profile.full_name || "الأستاذ"}</h1>
+            <p className="text-[11px] text-emerald-700 font-bold">
+              {profile.school_custom_name || "متوسطة"} — مادة الرياضيات
+              {profile.teacher_code && <span className="font-mono text-slate-500 mr-2">({profile.teacher_code})</span>}
+            </p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-600 px-3 py-1.5 rounded-xl border border-slate-200 transition"
-          >
-            <LogOut className="w-3.5 h-3.5" /> خروج
-          </button>
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/settings"
+              className="flex items-center gap-1 text-xs text-slate-600 hover:text-emerald-700 px-3 py-1.5 rounded-xl border border-slate-200 transition"
+            >
+              <Settings className="w-3.5 h-3.5" /> الإعدادات و QR
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-600 px-3 py-1.5 rounded-xl border border-slate-200 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" /> خروج
+            </button>
+          </div>
         </div>
 
         {/* أزرار سريعة للمعاينة */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-1 border-t border-slate-100 text-xs font-bold">
           <Link
-            href="/"
+            href={`/t/${profile.slug || profile.id}`}
             target="_blank"
             className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 transition text-[11px]"
           >
@@ -1126,7 +1100,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <span>ميثاق التقويم ⚖️</span>
           </Link>
           <Link
-            href="/honor"
+            href={withTeacher("/honor", profile.id)}
             target="_blank"
             className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/70 hover:bg-amber-100 transition text-[11px]"
           >
@@ -1134,7 +1108,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <span>لوحة الشرف</span>
           </Link>
           <Link
-            href="/parents"
+            href={withTeacher("/parents", profile.id)}
             target="_blank"
             className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl bg-sky-50 text-sky-800 border border-sky-200/70 hover:bg-sky-100 transition text-[11px]"
           >
@@ -1150,7 +1124,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <span>الخصومات (خاص 🔒)</span>
           </Link>
           <Link
-            href="/announcement"
+            href={withTeacher("/announcement", profile.id)}
             target="_blank"
             className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100 transition text-[11px]"
           >
@@ -1158,6 +1132,35 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <span>الإعلان والتوجيهات</span>
           </Link>
         </div>
+
+        {/* الملف البيداغوجي: الفضاء السري مع مفتش المقاطعة */}
+        <Link
+          href="/pedagogy"
+          className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-l from-indigo-600 to-blue-700 text-white hover:opacity-95 transition"
+        >
+          <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-black">الملف البيداغوجي مع المفتش 🔒</div>
+            <p className="text-[10px] text-indigo-100 mt-0.5">المذكرات والوثائق • مناشير المفتش • جدول التوقيت الأسبوعي</p>
+            <PedagogyAlerts teacherId={profile.id} />
+          </div>
+          <ExternalLink className="w-4 h-4 text-indigo-200" />
+        </Link>
+
+        {/* ملتقى الأساتذة وبنك الوضعيات */}
+        <Link
+          href="/forum"
+          className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-indigo-100 hover:border-indigo-300 transition"
+        >
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 text-lg">💬</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-black text-slate-800">ملتقى أساتذة الرياضيات وبنك الوضعيات</div>
+            <p className="text-[10px] text-slate-500 mt-0.5">اطرح إشكالية، شارك وضعية أو سلسلة، واستفد من توجيهات المفتشين</p>
+          </div>
+          <ExternalLink className="w-4 h-4 text-slate-400" />
+        </Link>
 
         {/* بطاقة التقييم الميداني السريع المستقل (مخصصة للهاتف أثناء الحصة) */}
         <div className="pt-2 border-t border-slate-100">
@@ -1299,8 +1302,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           </div>
 
           {/* اختيار المستوى */}
-          <div className="grid grid-cols-2 gap-2 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-2xs">
-            {([1, 2] as const).map((lv) => (
+          <div
+            className="grid gap-2 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-2xs"
+            style={{ gridTemplateColumns: `repeat(${Math.min(levelsTaught.length, 4)}, minmax(0, 1fr))` }}
+          >
+            {levelsTaught.map((lv) => (
               <button
                 key={lv}
                 onClick={() => {
@@ -4063,8 +4069,8 @@ function LessonCard({
         if (!isPdf && (file.type.startsWith("image/") || /\.(jpe?g|png|webp)$/i.test(file.name))) {
           try {
             fileToUpload = await imageCompression(file, {
-              maxSizeMB: 0.8,
-              maxWidthOrHeight: 2000,
+              maxSizeMB: BOARD_IMAGE_OPTIONS.maxSizeMB,
+              maxWidthOrHeight: BOARD_IMAGE_OPTIONS.maxWidthOrHeight,
               useWebWorker: true,
               fileType: "image/jpeg",
             });
@@ -5063,6 +5069,14 @@ function EditLessonModal({
   const [section, setSection] = useState(lesson.section || "المقطع 1 : الأعداد الطبيعية والأعداد العشرية");
   const [notes, setNotes] = useState(lesson.notes || "");
   const [homeworkNotes, setHomeworkNotes] = useState(lesson.homeworkNotes || "");
+  // تحويل ISO إلى صيغة حقل datetime-local بالتوقيت المحلي
+  const toLocalInput = (iso?: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+  const [homeworkDueAt, setHomeworkDueAt] = useState(toLocalInput(lesson.homeworkDueAt));
+  const [solutionPublishAt, setSolutionPublishAt] = useState(toLocalInput(lesson.solutionPublishAt));
   const [type, setType] = useState<NotebookType>(lesson.type || "lessons");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -5090,6 +5104,8 @@ function EditLessonModal({
           section: (type === "lessons" || type === "worksheets" || type === "summaries") ? section.trim() : undefined,
           notes: notes.trim() || undefined,
           homeworkNotes: type === "lessons" ? homeworkNotes.trim() || undefined : undefined,
+          homeworkDueAt: homeworkDueAt ? new Date(homeworkDueAt).toISOString() : null,
+          solutionPublishAt: solutionPublishAt ? new Date(solutionPublishAt).toISOString() : null,
         }),
       });
 
@@ -5251,6 +5267,29 @@ function EditLessonModal({
             onChange={(e) => setHomeworkNotes(e.target.value)}
             placeholder="مثال: حل التمارين 14 و 15 ص 30 في كراس المحاولات 96ص..."
           />
+        </div>
+
+        {/* جدولة نشر الحل: الواجب أولاً ثم الحل النموذجي بعد انتهاء المهلة */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-xl bg-blue-50/40 border border-blue-100">
+          <label className="text-[11px] font-bold text-blue-900 space-y-1">
+            <span>آخر أجل لإنجاز الواجب</span>
+            <input
+              type="datetime-local"
+              className="input text-xs"
+              value={homeworkDueAt}
+              onChange={(e) => {
+                setHomeworkDueAt(e.target.value);
+                if (!solutionPublishAt) setSolutionPublishAt(e.target.value);
+              }}
+            />
+          </label>
+          <label className="text-[11px] font-bold text-blue-900 space-y-1">
+            <span>نشر الحل النموذجي للأولياء ابتداءً من</span>
+            <input type="datetime-local" className="input text-xs" value={solutionPublishAt} onChange={(e) => setSolutionPublishAt(e.target.value)} />
+          </label>
+          <p className="sm:col-span-2 text-[10px] text-blue-800">
+            ترفع صور الحل متى شئت؛ لن تظهر للتلاميذ والأولياء قبل هذا الموعد. اتركه فارغاً للنشر الفوري.
+          </p>
         </div>
 
         <div className="flex gap-2 pt-1">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -35,10 +35,30 @@ export default function RegisterTeacherPage() {
   const [phone, setPhone] = useState("");
   const [districtId, setDistrictId] = useState("1");
   const [middleSchoolName, setMiddleSchoolName] = useState("");
+  const [middleSchoolId, setMiddleSchoolId] = useState("");
+  const [schools, setSchools] = useState<{ id: string; name: string; commune: string }[]>([]);
+
+  // المقاطعة المختارة من بطاقة الصفحة الرئيسية (?district=)
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get("district");
+    if (d && ["1", "2", "3", "4", "5"].includes(d)) setDistrictId(d);
+  }, []);
+
+  // متوسطات المقاطعة المعتمدة (يضيفها المشرف العام)
+  useEffect(() => {
+    setMiddleSchoolId("");
+    supabase
+      .from("middle_schools")
+      .select("id, name, commune")
+      .eq("district_id", Number(districtId))
+      .order("name")
+      .then(({ data }) => setSchools(data || []));
+  }, [districtId]);
   const [selectedLevels, setSelectedLevels] = useState<number[]>([1, 2]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [success, setSuccess] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
 
   const toggleLevel = (lvl: number) => {
     setSelectedLevels((prev) =>
@@ -58,12 +78,9 @@ export default function RegisterTeacherPage() {
     setLoading(true);
 
     try {
-      // توليد كود ورابط فريد للأستاذ
+      // توليد كود ورابط فريد للأستاذ (أحرف لاتينية فقط لروابط نظيفة؛ القاعدة تعالج أي تكرار)
       const randomCode = "MTH-" + Math.floor(1000 + Math.random() * 9000);
-      const cleanSlug =
-        "prof-" +
-        (fullName.trim().replace(/\s+/g, "-").toLowerCase() ||
-          Math.random().toString(36).substring(2, 7));
+      const cleanSlug = "prof-" + Math.random().toString(36).substring(2, 8);
 
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -74,7 +91,10 @@ export default function RegisterTeacherPage() {
             full_name: fullName.trim(),
             phone: phone.trim(),
             district_id: Number(districtId),
-            school_custom_name: middleSchoolName.trim(),
+            middle_school_id: middleSchoolId || "",
+            school_custom_name: middleSchoolId
+              ? schools.find((s) => s.id === middleSchoolId)?.name || middleSchoolName.trim()
+              : middleSchoolName.trim(),
             teacher_code: randomCode,
             slug: cleanSlug,
             levels_taught: selectedLevels,
@@ -84,6 +104,12 @@ export default function RegisterTeacherPage() {
 
       if (error) {
         throw error;
+      }
+
+      // إن كان تأكيد البريد مفعلاً فلا توجد جلسة بعد: نطلب من الأستاذ تأكيد بريده أولاً
+      if (!data.session) {
+        setNeedsConfirmation(true);
+        return;
       }
 
       setSuccess(true);
@@ -118,6 +144,16 @@ export default function RegisterTeacherPage() {
             <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700 text-sm">
               <AlertCircle className="w-5 h-5 shrink-0 text-red-500" />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {needsConfirmation && (
+            <div className="mb-5 p-4 bg-sky-50 border border-sky-200 rounded-xl flex items-center gap-3 text-sky-800 text-sm">
+              <Mail className="w-6 h-6 shrink-0 text-sky-600" />
+              <div>
+                <p className="font-bold">تم إنشاء حسابك! بقيت خطوة واحدة</p>
+                <p className="text-xs text-sky-700 mt-0.5">افتح بريدك الإلكتروني واضغط على رابط التأكيد، ثم سجّل الدخول.</p>
+              </div>
             </div>
           )}
 
@@ -215,10 +251,24 @@ export default function RegisterTeacherPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   اسم المتوسطة <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
+                {schools.length > 0 && (
+                  <select
+                    value={middleSchoolId}
+                    onChange={(e) => setMiddleSchoolId(e.target.value)}
+                    className="w-full mb-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  >
+                    <option value="">— متوسطتي غير موجودة في القائمة —</option>
+                    {schools.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} — {s.commune}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <div className={`relative ${middleSchoolId ? "hidden" : ""}`}>
                   <input
                     type="text"
-                    required
+                    required={!middleSchoolId}
                     value={middleSchoolName}
                     onChange={(e) => setMiddleSchoolName(e.target.value)}
                     placeholder="متوسطة الشهيد..."

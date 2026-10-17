@@ -29,7 +29,7 @@ export default async function WilayaHomePage() {
   // جلب عدد الأساتذة المسجلين في الولاية
   const { count: teacherCount } = await supabase
     .from("profiles")
-    .select("*", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .eq("role", "teacher");
 
   return (
@@ -101,12 +101,12 @@ export default async function WilayaHomePage() {
 
           {/* فضاء الأستاذ المؤسس كنموذج رائد */}
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="text-slate-500">النموذج المعتمد:</span>
+            <span className="text-slate-500">لا تعرف كود الأستاذ؟</span>
             <Link
-              href="/year/1"
+              href="/t/schools"
               className="text-emerald-700 font-bold hover:underline flex items-center gap-1"
             >
-              <span>فضاء الأستاذ محمد عدايكة (متوسطة المجاهد باهي علي)</span>
+              <span>ابحث حسب المقاطعة والمتوسطة</span>
               <ChevronLeft className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -139,7 +139,9 @@ export default async function WilayaHomePage() {
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">{d.desc}</p>
                 <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400">
-                  <span>التعليم المتوسط</span>
+                  <Link href={`/t/schools?district=${d.id}`} className="text-slate-600 hover:text-emerald-700 font-bold">
+                    أساتذة المقاطعة
+                  </Link>
                   <Link
                     href={`/register?district=${d.id}`}
                     className="text-emerald-600 group-hover:underline font-bold"

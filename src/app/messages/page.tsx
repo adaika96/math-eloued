@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useTeacherId, withTeacher, teacherHomeHref, useTeacherInfo, teacherLabel } from "@/lib/teacherParam";
 import {
   ArrowRight,
   ShieldCheck,
@@ -64,6 +65,8 @@ const AUDIENCES = [
 ];
 
 export default function MessagesPage() {
+  const teacherId = useTeacherId();
+  const teacherInfo = useTeacherInfo(teacherId);
   const [category, setCategory] = useState<MessageCategory>("question");
   const [targetLevel, setTargetLevel] = useState("");
   const [content, setContent] = useState("");
@@ -86,7 +89,7 @@ export default function MessagesPage() {
     setErrorMsg("");
 
     try {
-      const res = await fetch("/api/messages", {
+      const res = await fetch(withTeacher("/api/messages"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -115,7 +118,7 @@ export default function MessagesPage() {
       {/* رأس الصفحة وزر العودة */}
       <div className="flex items-center gap-3 bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs">
         <Link
-          href="/"
+          href={teacherHomeHref(teacherId)}
           className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 active:scale-95 transition shrink-0"
           aria-label="الرجوع للرئيسية"
         >
@@ -129,7 +132,7 @@ export default function MessagesPage() {
             صندوق الصراحة والشفافية
           </h1>
           <p className="text-[11px] text-slate-500">
-            وجّه رسالة سرية أو ملاحظة للأستاذ محمد عدايكة
+            وجّه رسالة سرية أو ملاحظة {teacherInfo ? `لـ ${teacherInfo.full_name}` : "للأستاذ"}
           </p>
         </div>
       </div>
@@ -172,7 +175,7 @@ export default function MessagesPage() {
               كتابة رسالة أخرى
             </button>
             <Link
-              href="/"
+              href={teacherHomeHref(teacherId)}
               className="py-2.5 px-5 rounded-xl bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 transition shadow-sm"
             >
               العودة إلى الصفحة الرئيسية

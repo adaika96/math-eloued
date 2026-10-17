@@ -2,11 +2,13 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { useTeacherId, withTeacher, teacherHomeHref } from "@/lib/teacherParam";
 import { ChevronLeft, Image as ImageIcon, BookOpen, Layers, StickyNote, Sparkles, FileText } from "lucide-react";
 import { LEVELS, NOTEBOOKS, isPdfFile, type Lesson, type NotebookType } from "@/lib/types";
 import { BackHeader, Loading, Empty } from "@/components/ui";
 
-export function YearLessons({ level }: { level: 1 | 2 }) {
+export function YearLessons({ level }: { level: 1 | 2 | 3 | 4 }) {
+  const teacherId = useTeacherId();
   const [activeTab, setActiveTab] = useState<NotebookType>("lessons");
   const [allLessons, setAllLessons] = useState<Lesson[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -14,7 +16,7 @@ export function YearLessons({ level }: { level: 1 | 2 }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/lessons?level=${level}&_t=${Date.now()}`, { cache: "no-store" })
+    fetch(withTeacher(`/api/lessons?level=${level}&_t=${Date.now()}`), { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (data.lessons) {
@@ -89,7 +91,7 @@ export function YearLessons({ level }: { level: 1 | 2 }) {
 
   return (
     <div className="pb-12 space-y-4 fade-up">
-      <BackHeader href="/" title={LEVELS[level].label} subtitle="اختر القسم لمشاهدة الدروس أو السلاسل والملخصات" />
+      <BackHeader href={teacherHomeHref(teacherId)} title={LEVELS[level].label} subtitle="اختر القسم لمشاهدة الدروس أو السلاسل والملخصات" />
 
       {/* أزرار اختيار الأقسام الـ 4 (الدروس، الأعمال الموجهة، سلاسل التمارين، الملخصات) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-2 rounded-2xl border border-slate-100 shadow-2xs">
@@ -244,7 +246,7 @@ export function YearLessons({ level }: { level: 1 | 2 }) {
                         return (
                           <Link
                             key={l.id}
-                            href={`/lesson/${l.id}`}
+                            href={withTeacher(`/lesson/${l.id}`, teacherId)}
                             className="flex items-start gap-3 bg-white rounded-xl p-3 border border-slate-100 shadow-2xs active:scale-[0.99] transition hover:border-slate-200"
                           >
                             {/* شارة رقم المورد */}
@@ -328,7 +330,7 @@ export function YearLessons({ level }: { level: 1 | 2 }) {
                 return (
                   <Link
                     key={l.id}
-                    href={`/lesson/${l.id}`}
+                    href={withTeacher(`/lesson/${l.id}`, teacherId)}
                     className="flex items-start gap-3 bg-white rounded-2xl p-3.5 border border-slate-100 shadow-2xs active:scale-[0.99] transition hover:border-slate-200"
                   >
                     {/* شارة رقم الحصة */}
@@ -397,7 +399,7 @@ export function YearLessons({ level }: { level: 1 | 2 }) {
                 return (
                   <Link
                     key={l.id}
-                    href={`/lesson/${l.id}`}
+                    href={withTeacher(`/lesson/${l.id}`, teacherId)}
                     className="flex items-start gap-3 bg-white rounded-2xl p-3.5 border border-slate-100 shadow-2xs active:scale-[0.99] transition hover:border-slate-200"
                   >
                     <span className="w-9 h-9 shrink-0 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-black text-xs mt-0.5">
@@ -469,7 +471,7 @@ export function YearLessons({ level }: { level: 1 | 2 }) {
                 return (
                   <Link
                     key={l.id}
-                    href={`/lesson/${l.id}`}
+                    href={withTeacher(`/lesson/${l.id}`, teacherId)}
                     className="flex items-start gap-3 bg-white rounded-2xl p-3.5 border border-slate-100 shadow-2xs active:scale-[0.99] transition hover:border-slate-200"
                   >
                     <span className="w-9 h-9 shrink-0 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-black text-xs mt-0.5">

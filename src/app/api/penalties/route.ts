@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
+import { requireTeacher } from "@/lib/auth";
 import { Penalty } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -8,8 +8,8 @@ export const revalidate = 0;
 
 // جلب قائمة الخصومات والعقوبات (خاص بالأستاذ فقط - محمي تماماً من الطلاب والأولياء)
 export async function GET(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json(
       { penalties: [] },
       {
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const className = searchParams.get("class");
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   let penalties = data.penalties || [];
 
   if (className && className !== "all") {
@@ -54,8 +54,8 @@ export async function GET(req: NextRequest) {
 
 // إضافة خصم أو عقوبة لتلميذ أو مجموعة تلاميذ (للأستاذ فقط)
 export async function POST(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "يرجى كتابة سبب العقوبة" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.penalties = data.penalties || [];
 
     const now = new Date();
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
       data.penalties.unshift(newPenalty);
     }
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({
       success: true,
@@ -132,8 +132,8 @@ export async function POST(req: NextRequest) {
 
 // تعديل عقوبة / خصم مسجل (للأستاذ فقط)
 export async function PUT(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
@@ -145,7 +145,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "معرّف السجل مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.penalties = data.penalties || [];
     const item = data.penalties.find((p) => p.id === id);
 
@@ -160,7 +160,7 @@ export async function PUT(req: NextRequest) {
     if (date !== undefined) item.date = String(date).trim() || undefined;
     if (notes !== undefined) item.notes = String(notes).trim() || undefined;
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, penalty: item });
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "فشل التعديل" }, { status: 500 });
@@ -169,17 +169,17 @@ export async function PUT(req: NextRequest) {
 
 // حذف سجل عقوبة (للأستاذ فقط)
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك - يرجى تسجيل الدخول" }, { status: 401 });
   }
 
   const searchParams = new URL(req.url).searchParams;
   if (searchParams.get("all") === "true") {
     try {
-      const data = await getLessonsData();
+      const data = await getLessonsData(ctx);
       data.penalties = [];
-      await saveLessonsData(data);
+      await saveLessonsData(ctx, data);
       return NextResponse.json({ success: true, message: "تم مسح كافة سجلات الخصومات بنجاح" });
     } catch (err: any) {
       return NextResponse.json({ error: err?.message || "فشل مسح الخصومات" }, { status: 500 });
@@ -199,7 +199,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.penalties = data.penalties || [];
     const index = data.penalties.findIndex((p) => p.id === id);
 
@@ -208,7 +208,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     data.penalties.splice(index, 1);
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, deletedId: id });
   } catch (err: any) {

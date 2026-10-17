@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLessonsData, saveLessonsData } from "@/lib/storage";
-import { verifyAdminSession } from "@/lib/auth";
-import { AnonymousMessage, MessageCategory } from "@/lib/types";
+import { requireTeacher, resolveReader } from "@/lib/auth";
+import { clientIp, rateLimit } from "@/lib/rateLimit";
+import { MessageCategory } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 // إرسال رسالة مجهولة الهوية (مفتوح للجميع: تلميذ، ولي أمر... دون تسجيل أي هوية)
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(`msg:${clientIp(req)}`, 5, 10 * 60_000);
+  if (limited) return limited;
+
   try {
     const body = await req.json();
     const { content, category = "other", targetLevel } = body;
@@ -27,21 +31,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // تنظيف وتأكيد عدم وجود أي هوية مسجلة
-    const data = await getLessonsData();
-    data.anonymousMessages = data.anonymousMessages || [];
+    // الأستاذ المستهدف (الرسالة تُحفظ في فضائه الخاص عبر دالة آمنة دون كشف أي بيانات)
+    const reader = await resolveReader(req);
+    if (!reader) {
+      return NextResponse.json({ error: "يرجى تحديد الأستاذ" }, { status: 400 });
+    }
 
-    const newMessage: AnonymousMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      category: (category as MessageCategory) || "other",
-      targetLevel: targetLevel ? String(targetLevel).trim() : undefined,
-      content: trimmedContent,
-      createdAt: new Date().toISOString(),
-      read: false,
-    };
-
-    data.anonymousMessages.unshift(newMessage);
-    await saveLessonsData(data);
+    const { error } = await reader.supabase.rpc("post_anonymous_message", {
+      p_teacher_id: reader.teacherId,
+      p_message: {
+        category: (category as MessageCategory) || "other",
+        targetLevel: targetLevel ? String(targetLevel).trim() : undefined,
+        content: trimmedContent,
+      },
+    });
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({
       success: true,
@@ -57,15 +61,15 @@ export async function POST(req: NextRequest) {
 
 // قراءة الرسائل المجهولة (للأستاذ فقط بعد تسجيل الدخول)
 export async function GET(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json(
       { error: "غير مصرح لك - هذه الرسائل سرية للأستاذ فقط" },
       { status: 401 }
     );
   }
 
-  const data = await getLessonsData();
+  const data = await getLessonsData(ctx);
   const list = (data.anonymousMessages || []).slice();
 
   // ترتيب من الأحدث إلى الأقدم
@@ -85,8 +89,8 @@ export async function GET(req: NextRequest) {
 
 // تحديث حالة القراءة (للأستاذ فقط)
 export async function PATCH(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -98,7 +102,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "معرّف الرسالة مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.anonymousMessages = data.anonymousMessages || [];
 
     const msg = data.anonymousMessages.find((m) => m.id === id);
@@ -107,7 +111,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     msg.read = read !== undefined ? Boolean(read) : !msg.read;
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true, message: msg });
   } catch (e: any) {
@@ -117,8 +121,8 @@ export async function PATCH(req: NextRequest) {
 
 // حذف رسالة (للأستاذ فقط)
 export async function DELETE(req: NextRequest) {
-  const isAuth = await verifyAdminSession();
-  if (!isAuth) {
+  const ctx = await requireTeacher();
+  if (!ctx) {
     return NextResponse.json({ error: "غير مصرح لك" }, { status: 401 });
   }
 
@@ -130,10 +134,10 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "معرّف الرسالة مطلوب" }, { status: 400 });
     }
 
-    const data = await getLessonsData();
+    const data = await getLessonsData(ctx);
     data.anonymousMessages = (data.anonymousMessages || []).filter((m) => m.id !== id);
 
-    await saveLessonsData(data);
+    await saveLessonsData(ctx, data);
 
     return NextResponse.json({ success: true });
   } catch (e: any) {
