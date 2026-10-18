@@ -255,13 +255,21 @@ export async function uploadImageFile(
 const SUPABASE_PUBLIC_MARKER = `/storage/v1/object/public/${BUCKETS.PUBLIC_LESSONS}/`;
 
 export async function deleteImageFile(ctx: TeacherContext, url: string): Promise<void> {
+  // روابط الصور مخزنة في بيانات يكتبها الأستاذ نفسه، فلا نثق بها: الحذف محصور في ملفاته فقط
   const markerIndex = url.indexOf(SUPABASE_PUBLIC_MARKER);
   if (markerIndex !== -1) {
     const objectPath = decodeURIComponent(url.slice(markerIndex + SUPABASE_PUBLIC_MARKER.length).split("?")[0]);
+    if (!objectPath.startsWith(`${ctx.teacherId}/`) || objectPath.split("/").includes("..")) {
+      console.warn("Refusing to delete storage object outside the teacher's folder:", objectPath);
+      return;
+    }
     const { error } = await ctx.supabase.storage.from(BUCKETS.PUBLIC_LESSONS).remove([objectPath]);
     if (error) console.error("Error deleting storage object:", error);
     return;
   }
+
+  // ملفات الموقع القديم تخص صاحبه وحده (تُحذف بمفتاح الخادم، لذا لا يُسمح بها لغيره)
+  if (!isLegacyOwner(ctx)) return;
 
   // صور قديمة على Vercel Blob (الموقع الأصلي)
   const token = getBlobToken();
@@ -274,10 +282,15 @@ export async function deleteImageFile(ctx: TeacherContext, url: string): Promise
     return;
   }
 
-  // صور محلية قديمة
+  // صور محلية قديمة: يجب أن يبقى المسار داخل مجلد الرفع
   if (url.startsWith("/uploads/")) {
+    const fullPath = path.resolve(LOCAL_UPLOADS_DIR, url.slice("/uploads/".length));
+    if (!fullPath.startsWith(LOCAL_UPLOADS_DIR + path.sep)) {
+      console.warn("Refusing to delete file outside uploads dir:", url);
+      return;
+    }
     try {
-      await fs.unlink(path.join(LOCAL_UPLOADS_DIR, url.replace("/uploads/", "")));
+      await fs.unlink(fullPath);
     } catch (e) {
       console.error("Error deleting local file:", e);
     }

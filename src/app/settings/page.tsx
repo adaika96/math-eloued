@@ -28,7 +28,13 @@ export default function TeacherSettingsPage() {
   useEffect(() => {
     if (!profile) return;
     setFullName(profile.full_name || "");
-    setPhone(profile.phone || "");
+    // رقم الهاتف في جدول خاص لا يراه إلا صاحبه ومفتش مقاطعته والمشرف
+    supabase
+      .from("profile_contacts")
+      .select("phone")
+      .eq("id", profile.id)
+      .maybeSingle()
+      .then(({ data }) => setPhone(data?.phone || ""));
     setBio(profile.bio || "");
     setSchoolId(profile.middle_school_id || "");
     setSchoolName(profile.school_custom_name || "");
@@ -90,7 +96,6 @@ export default function TeacherSettingsPage() {
       .from("profiles")
       .update({
         full_name: fullName.trim(),
-        phone: phone.trim() || null,
         bio: bio.trim() || null,
         middle_school_id: chosenSchool ? chosenSchool.id : null,
         school_custom_name: chosenSchool ? chosenSchool.name : schoolName.trim() || null,
@@ -99,8 +104,11 @@ export default function TeacherSettingsPage() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", profile.id);
+    const { error: contactError } = await supabase
+      .from("profile_contacts")
+      .upsert({ id: profile.id, phone: phone.trim() || null, updated_at: new Date().toISOString() });
     setSaving(false);
-    if (error) setMessage({ type: "err", text: error.message });
+    if (error || contactError) setMessage({ type: "err", text: (error || contactError)!.message });
     else {
       setMessage({ type: "ok", text: "✓ تم حفظ الإعدادات؛ تظهر التغييرات للأولياء فوراً" });
       reload();

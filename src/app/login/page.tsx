@@ -45,7 +45,15 @@ export default function LoginPage() {
 
       // توجيه ذكي حسب الدور، مع احترام صفحة الوجهة ?next= لحسابات الأساتذة
       const next = new URLSearchParams(window.location.search).get("next");
-      const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+      let safeNext: string | null = null;
+      if (next && next.startsWith("/") && !/[\\\s]/.test(next)) {
+        try {
+          const target = new URL(next, window.location.origin);
+          if (target.origin === window.location.origin) safeNext = target.pathname + target.search + target.hash;
+        } catch {
+          safeNext = null;
+        }
+      }
 
       if (profile.role === "admin") {
         router.push("/super-admin");

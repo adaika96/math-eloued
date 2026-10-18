@@ -220,7 +220,6 @@ export interface UserProfile {
   role: UserRole;
   full_name?: string;
   fullName?: string;
-  phone?: string;
   district_id?: number;
   districtId?: number;
   middle_school_id?: string;
