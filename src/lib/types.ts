@@ -317,7 +317,7 @@ export interface InspectorCircular {
   id: string;
   inspector_id?: string;
   inspectorId?: string;
-  district_id?: number;
+  district_id?: number | null; // null = منشور ولائي من المشرف لكل المقاطعات
   districtId?: number;
   target_school_id?: string;
   targetSchoolId?: string;

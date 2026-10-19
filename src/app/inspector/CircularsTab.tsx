@@ -275,10 +275,15 @@ export function CircularsTab({
                     <div className="flex flex-wrap items-center gap-2">
                       <h4 className="font-bold text-slate-900 text-sm">{c.title}</h4>
                       <span className={`text-[10px] px-2 py-0.5 rounded-md border font-bold ${imp.className}`}>{imp.label}</span>
+                      {c.district_id == null && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-md border font-bold bg-amber-50 text-amber-800 border-amber-200">منشور ولائي</span>
+                      )}
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       {formatDate(c.created_at, true)} •{" "}
-                      {c.target_teacher_id
+                      {c.district_id == null
+                        ? "من المشرف العام إلى كل أساتذة الولاية"
+                        : c.target_teacher_id
                         ? `إلى: ${teacherName[c.target_teacher_id] || "أستاذ"}`
                         : c.target_school_id
                         ? `إلى: ${schoolName[c.target_school_id] || "متوسطة"}`
@@ -301,6 +306,7 @@ export function CircularsTab({
                   </button>
                 )}
 
+                {c.district_id != null && (
                 <button onClick={() => setExpanded(isOpen ? null : c.id)} className="w-full text-right space-y-1 pt-1">
                   <div className="flex items-center justify-between text-[11px] font-bold">
                     <span className="text-emerald-700 flex items-center gap-1">
@@ -314,8 +320,9 @@ export function CircularsTab({
                     <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
                   </div>
                 </button>
+                )}
 
-                {isOpen && (
+                {isOpen && c.district_id != null && (
                   <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1">
                     {audience.map((p) => {
                       const at = reads.get(p.id);

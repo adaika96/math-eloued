@@ -79,7 +79,13 @@ export function CircularsInbox({ profile, onRead }: { profile: UserProfile; onRe
                     <p className={`text-xs ${isRead ? "font-bold text-slate-700" : "font-black text-slate-900"}`}>{c.title}</p>
                     <p className="text-[10px] text-slate-500 mt-0.5">
                       {c.created_at && new Date(c.created_at).toLocaleDateString("ar-DZ", { year: "numeric", month: "short", day: "numeric" })}
-                      {c.target_teacher_id ? " • موجه لك شخصياً" : c.target_school_id ? " • موجه لمتوسطتك" : " • لكل أساتذة المقاطعة"}
+                      {c.district_id == null
+                        ? " • منشور ولائي من المشرف العام"
+                        : c.target_teacher_id
+                        ? " • موجه لك شخصياً"
+                        : c.target_school_id
+                        ? " • موجه لمتوسطتك"
+                        : " • لكل أساتذة المقاطعة"}
                     </p>
                   </div>
                   <span className={`shrink-0 px-2 py-0.5 rounded-md border text-[10px] font-bold ${importance.className}`}>

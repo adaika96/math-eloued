@@ -44,7 +44,7 @@ export default function InspectorDashboardPage() {
       const [teachersRes, notesRes, circularsRes, schoolsRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("role", "teacher").eq("district_id", district).order("full_name"),
         supabase.from("pedagogical_notes").select("*").eq("district_id", district).order("created_at", { ascending: false }),
-        supabase.from("inspector_circulars").select("*").eq("district_id", district).order("created_at", { ascending: false }),
+        supabase.from("inspector_circulars").select("*").or(`district_id.eq.${district},district_id.is.null`).order("created_at", { ascending: false }),
         supabase.from("middle_schools").select("id, name, commune").eq("district_id", district).order("name"),
       ]);
       const firstError = [teachersRes, notesRes, circularsRes, schoolsRes].find((r) => r.error)?.error;

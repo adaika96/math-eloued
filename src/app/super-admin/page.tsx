@@ -29,6 +29,7 @@ import { SchoolsManager } from "./SchoolsManager";
 import { OverviewTab } from "./OverviewTab";
 import { InspectorsTab } from "./InspectorsTab";
 import { AuditLogTab } from "./AuditLogTab";
+import { WilayaCircularTab } from "./WilayaCircularTab";
 import { DISTRICTS_INFO } from "./districts";
 
 type AdminTab = "overview" | "accounts" | "inspectors" | "schools" | "circular" | "moderation" | "log";
@@ -38,6 +39,7 @@ const TABS: [AdminTab, string][] = [
   ["accounts", "الحسابات"],
   ["inspectors", "المفتشون والمقاطعات"],
   ["schools", "المتوسطات"],
+  ["circular", "منشور ولائي"],
   ["log", "سجل العمليات"],
 ];
 
@@ -54,6 +56,7 @@ export default function SuperAdminPage() {
   const [toast, setToast] = useState<ToastState>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [tab, setTab] = useState<AdminTab>("overview");
+  const [adminId, setAdminId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     userId: string;
     userName: string;
@@ -88,6 +91,7 @@ export default function SuperAdminPage() {
       return;
     }
 
+    setAdminId(session.user.id);
     setAuthorized(true);
     await loadProfiles();
     setLoading(false);
@@ -449,6 +453,9 @@ export default function SuperAdminPage() {
         {tab === "overview" && <OverviewTab profiles={profiles} onOpenLog={() => setTab("log")} />}
         {tab === "inspectors" && <InspectorsTab profiles={profiles} onChanged={loadProfiles} />}
         {tab === "schools" && <SchoolsManager />}
+        {tab === "circular" && (
+          <WilayaCircularTab admin={profiles.find((p) => p.id === adminId) ?? null} profiles={profiles} />
+        )}
         {tab === "log" && <AuditLogTab profiles={profiles} />}
 
         {tab === "accounts" && (<>
