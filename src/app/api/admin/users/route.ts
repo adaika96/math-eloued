@@ -10,6 +10,20 @@ async function requireAdmin() {
   return user && profile?.role === "admin" ? user : null;
 }
 
+// عمليات مفتاح الخدمة لا تمر بمحفزات السجل (auth.uid() فارغ)، فنسجلها هنا باسم المشرف
+async function logAction(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  actorId: string,
+  action: string,
+  targetId: string,
+  details: Record<string, unknown>
+) {
+  const { error } = await admin
+    .from("admin_audit_log")
+    .insert({ actor_id: actorId, action, target_type: "profile", target_id: targetId, details });
+  if (error) console.error("admin_audit_log:", error.message);
+}
+
 const NOT_CONFIGURED = NextResponse.json(
   { error: "إنشاء وحذف الحسابات يتطلب ضبط SUPABASE_SERVICE_ROLE_KEY على الخادم" },
   { status: 503 }
@@ -17,7 +31,8 @@ const NOT_CONFIGURED = NextResponse.json(
 
 // إنشاء حساب مفتش مقاطعة مباشرة (بكلمة مرور مؤقتة يسلمها المشرف للمفتش)
 export async function POST(req: NextRequest) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "غير مصرح لك" }, { status: 403 });
+  const me = await requireAdmin();
+  if (!me) return NextResponse.json({ error: "غير مصرح لك" }, { status: 403 });
   const admin = getSupabaseAdmin();
   if (!admin) return NOT_CONFIGURED;
 
@@ -50,6 +65,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: roleError.message }, { status: 500 });
   }
 
+  await logAction(admin, me.id, "inspector_created", data.user.id, { full_name: fullName, district_id: districtId });
   return NextResponse.json({ success: true, userId: data.user.id, email, tempPassword });
 }
 
@@ -64,7 +80,9 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "معرّف الحساب مطلوب" }, { status: 400 });
   if (id === me.id) return NextResponse.json({ error: "لا يمكنك حذف حسابك الخاص" }, { status: 400 });
 
+  const { data: target } = await admin.from("profiles").select("full_name, role").eq("id", id).maybeSingle();
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  await logAction(admin, me.id, "user_deleted", id, { full_name: target?.full_name ?? null, role: target?.role ?? null });
   return NextResponse.json({ success: true });
 }
