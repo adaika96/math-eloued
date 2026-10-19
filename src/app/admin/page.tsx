@@ -1067,6 +1067,25 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
           </div>
           <div className="flex items-center gap-1.5">
             <Link
+              href={`/t/${profile.slug || profile.id}`}
+              target="_blank"
+              className="hidden lg:flex items-center gap-1 text-xs text-slate-600 hover:text-emerald-700 px-3 py-1.5 rounded-xl border border-slate-200 transition"
+            >
+              <Globe className="w-3.5 h-3.5" /> معاينة فضائي
+            </Link>
+            <Link
+              href="/pedagogy"
+              className="hidden lg:flex items-center gap-1 text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-xl transition"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" /> الملف البيداغوجي
+            </Link>
+            <Link
+              href="/forum"
+              className="hidden lg:flex items-center gap-1 text-xs text-slate-600 hover:text-indigo-700 px-3 py-1.5 rounded-xl border border-slate-200 transition"
+            >
+              💬 الملتقى
+            </Link>
+            <Link
               href="/settings"
               className="flex items-center gap-1 text-xs text-slate-600 hover:text-emerald-700 px-3 py-1.5 rounded-xl border border-slate-200 transition"
             >
@@ -1079,6 +1098,10 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
               <LogOut className="w-3.5 h-3.5" /> خروج
             </button>
           </div>
+        </div>
+
+        <div className="hidden lg:block">
+          <PedagogyAlerts teacherId={profile.id} />
         </div>
 
         {/* أزرار سريعة للمعاينة */}
@@ -1136,7 +1159,7 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
         {/* الملف البيداغوجي: الفضاء السري مع مفتش المقاطعة */}
         <Link
           href="/pedagogy"
-          className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-l from-indigo-600 to-blue-700 text-white hover:opacity-95 transition"
+          className="flex lg:hidden items-center gap-3 p-3 rounded-2xl bg-gradient-to-l from-indigo-600 to-blue-700 text-white hover:opacity-95 transition"
         >
           <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
             <ShieldCheck className="w-5 h-5" />
@@ -1152,7 +1175,7 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
         {/* ملتقى الأساتذة وبنك الوضعيات */}
         <Link
           href="/forum"
-          className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-indigo-100 hover:border-indigo-300 transition"
+          className="flex lg:hidden items-center gap-3 p-3 rounded-2xl bg-white border border-indigo-100 hover:border-indigo-300 transition"
         >
           <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 text-lg">💬</div>
           <div className="flex-1 min-w-0">
@@ -1163,7 +1186,7 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
         </Link>
 
         {/* بطاقة التقييم الميداني السريع المستقل (مخصصة للهاتف أثناء الحصة) */}
-        <div className="pt-2 border-t border-slate-100">
+        <div className="pt-2 border-t border-slate-100 lg:hidden">
           <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 p-3 rounded-2xl text-white shadow-sm flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg font-black shrink-0">
@@ -1389,8 +1412,9 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
             </button>
           </div>
 
+          <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-4 lg:items-start">
           {/* نموذج إضافة مورد أو حصة أو سلسلة أو ملخص */}
-          <form onSubmit={addItem} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm space-y-3.5">
+          <form onSubmit={addItem} className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm space-y-3.5 lg:sticky lg:top-4">
             <div className="flex items-center justify-between pb-1 border-b border-slate-100">
               <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                 <span>
@@ -1786,14 +1810,16 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
               </div>
             )}
           </div>
+          </div>
         </div>
       ) : mainTab === "summons" ? (
         /* ==================== 2. تبويب أولياء أود استقبالهم ==================== */
         <div className="space-y-4">
+          <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-4 lg:items-start">
           {/* نموذج إضافة ولي تلميذ للاستقبال */}
           <form
             onSubmit={addSummons}
-            className="bg-white rounded-2xl p-4 border border-sky-100 shadow-sm space-y-3.5"
+            className="bg-white rounded-2xl p-4 border border-sky-100 shadow-sm space-y-3.5 lg:sticky lg:top-4"
           >
             <div className="flex items-center justify-between pb-1 border-b border-sky-100">
               <div className="flex items-center gap-2">
@@ -2008,14 +2034,16 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
               </div>
             )}
           </div>
+          </div>
         </div>
       ) : mainTab === "honors" ? (
         /* ==================== 3. تبويب لوحة الشرف ==================== */
         <div className="space-y-4">
+          <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-4 lg:items-start">
           {/* نموذج إضافة تلميذ إلى لوحة الشرف */}
           <form
             onSubmit={addHonor}
-            className="bg-white rounded-2xl p-4 border border-amber-200/80 shadow-sm space-y-3.5"
+            className="bg-white rounded-2xl p-4 border border-amber-200/80 shadow-sm space-y-3.5 lg:sticky lg:top-4"
           >
             <div className="flex items-center justify-between pb-1 border-b border-amber-100">
               <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
@@ -2236,6 +2264,7 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
               </div>
             )}
           </div>
+          </div>
         </div>
       ) : mainTab === "penalties" ? (
         /* ==================== 4. تبويب الخصومات والعقوبات (خاص بالأستاذ) ==================== */
@@ -2253,10 +2282,11 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
             </div>
           </div>
 
+          <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-4 lg:items-start">
           {/* نموذج إضافة عقوبة أو خصم لتلميذ أو مجموعة تلاميذ */}
           <form
             onSubmit={addPenalty}
-            className="bg-white rounded-2xl p-4 border-2 border-red-200/90 shadow-sm space-y-3.5"
+            className="bg-white rounded-2xl p-4 border-2 border-red-200/90 shadow-sm space-y-3.5 lg:sticky lg:top-4"
           >
             <div className="flex items-center justify-between pb-1 border-b border-red-100">
               <span className="text-xs font-black text-red-950 flex items-center gap-1.5">
@@ -2698,6 +2728,7 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
               </div>
             )}
           </div>
+          </div>
         </div>
       ) : null}
 
@@ -2941,7 +2972,7 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-3 lg:items-start">
                     {currentEvals.map((student) => {
                       const isExc = student.totalScore >= 18;
                       const isVeryGood = student.totalScore >= 15 && student.totalScore < 18;
@@ -3363,10 +3394,11 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
             </div>
           </div>
 
+          <div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-4 lg:items-start">
           {/* نموذج إضافة أو تعديل إعلان */}
           <form
             onSubmit={handleSaveAnnouncement}
-            className="bg-white rounded-2xl p-4 border-2 border-teal-200/90 shadow-sm space-y-3.5"
+            className="bg-white rounded-2xl p-4 border-2 border-teal-200/90 shadow-sm space-y-3.5 lg:sticky lg:top-4"
           >
             <div className="flex items-center justify-between pb-2 border-b border-teal-100">
               <span className="text-xs font-black text-teal-950 flex items-center gap-1.5">
@@ -3613,6 +3645,7 @@ function Dashboard({ profile, onLogout }: { profile: TeacherSession; onLogout: (
                 ))}
               </div>
             )}
+          </div>
           </div>
         </div>
       )}
