@@ -7,6 +7,10 @@
 -- 1) المنشور الولائي: district_id = NULL يعني كل المقاطعات (للمشرف وحده)
 -- --------------------------------------------------------------------
 ALTER TABLE public.inspector_circulars ALTER COLUMN district_id DROP NOT NULL;
+-- المنشور الولائي موجّه للجميع: لا استهداف لأستاذ أو متوسطة
+ALTER TABLE public.inspector_circulars DROP CONSTRAINT IF EXISTS circulars_wilaya_untargeted;
+ALTER TABLE public.inspector_circulars ADD CONSTRAINT circulars_wilaya_untargeted
+  CHECK (district_id IS NOT NULL OR (target_teacher_id IS NULL AND target_school_id IS NULL));
 
 DROP POLICY IF EXISTS "circulars_inspector_all" ON public.inspector_circulars;
 CREATE POLICY "circulars_inspector_all" ON public.inspector_circulars
@@ -197,6 +201,17 @@ END $$;
 REVOKE ALL ON FUNCTION public.admin_wilaya_stats() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.admin_wilaya_stats() TO authenticated;
 
+-- تحويل تاريخ يكتبه الأستاذ في JSON دون إسقاط الاستعلام عند قيمة غير صالحة
+CREATE OR REPLACE FUNCTION public.try_timestamptz(p TEXT)
+RETURNS TIMESTAMPTZ
+LANGUAGE plpgsql STABLE SET search_path = public
+AS $$
+BEGIN
+  RETURN p::timestamptz;
+EXCEPTION WHEN others THEN
+  RETURN NULL;
+END $$;
+
 -- آخر إعلانات الأساتذة العامة لمراقبة المحتوى (قراءة فقط)
 CREATE OR REPLACE FUNCTION public.admin_recent_announcements(p_limit INT DEFAULT 50)
 RETURNS TABLE (
@@ -210,15 +225,14 @@ BEGIN
   END IF;
   RETURN QUERY
   SELECT p.id, p.full_name, p.slug, a->>'title', a->>'content', a->>'category',
-         (a->>'createdAt')::timestamptz AS created
+         public.try_timestamptz(a->>'createdAt') AS created
   FROM public.teacher_public_data pub
   JOIN public.profiles p ON p.id = pub.teacher_id
   CROSS JOIN LATERAL jsonb_array_elements(
     CASE WHEN jsonb_typeof(pub.data->'announcements') = 'array' THEN pub.data->'announcements' ELSE '[]'::jsonb END
   ) AS a
   WHERE COALESCE(a->>'active', 'true') <> 'false'
-    AND (a->>'createdAt') ~ '^\d{4}-\d{2}-\d{2}'
-  ORDER BY created DESC
+  ORDER BY created DESC NULLS LAST
   LIMIT LEAST(GREATEST(p_limit, 1), 200);
 END $$;
 

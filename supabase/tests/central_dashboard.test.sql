@@ -17,7 +17,8 @@ UPDATE public.profiles SET role = 'inspector' WHERE id IN ('c2000000-0000-4000-8
 INSERT INTO public.teacher_public_data (teacher_id, data) VALUES
   ('c3000000-0000-4000-8000-000000000003', '{"lessons":[{"id":"1"},{"id":"2"},{"id":"3"}],
     "announcements":[{"id":"n1","title":"active one","content":"c","category":"general","createdAt":"2026-10-18T10:00:00Z"},
-                     {"id":"n2","title":"hidden one","content":"c","category":"general","active":false,"createdAt":"2026-10-18T11:00:00Z"}]}'),
+                     {"id":"n2","title":"hidden one","content":"c","category":"general","active":false,"createdAt":"2026-10-18T11:00:00Z"},
+                     {"id":"n3","title":"bad date","content":"c","category":"general","createdAt":"2026-99-99T00:00:00Z"}]}'),
   ('c4000000-0000-4000-8000-000000000004', '{"lessons":{}}');
 
 INSERT INTO storage.objects (bucket_id, name) VALUES
@@ -50,6 +51,10 @@ BEGIN
   SELECT count(*) FILTER (WHERE title = 'active one'), count(*) FILTER (WHERE title = 'hidden one')
     INTO n, h FROM public.admin_recent_announcements(50);
   IF n <> 1 OR h <> 0 THEN RAISE EXCEPTION 'recent_announcements failed: active % hidden %', n, h; END IF;
+  -- bad_date_tolerated: تاريخ غير صالح لا يُسقط القائمة ويُرتّب في آخرها
+  IF (SELECT count(*) FROM public.admin_recent_announcements(50) WHERE title = 'bad date' AND created_at IS NULL) <> 1 THEN
+    RAISE EXCEPTION 'bad_date_tolerated failed';
+  END IF;
 END $$;
 
 -- ---------- المنشور الولائي ----------
@@ -62,6 +67,14 @@ BEGIN
                  AND actor_id = 'c1000000-0000-4000-8000-000000000001') THEN
     RAISE EXCEPTION 'wilaya_circular_logged failed';
   END IF;
+END $$;
+
+DO $$ -- wilaya_circular_untargeted
+BEGIN
+  INSERT INTO public.inspector_circulars (inspector_id, district_id, title, content, target_teacher_id)
+  VALUES ('c1000000-0000-4000-8000-000000000001', NULL, 'targeted', 'x', 'c3000000-0000-4000-8000-000000000003');
+  RAISE EXCEPTION 'wilaya_circular_untargeted failed';
+EXCEPTION WHEN check_violation THEN NULL;
 END $$;
 
 -- أستاذ في المقاطعة 3 يرى المنشور الولائي ومرفقه فقط
