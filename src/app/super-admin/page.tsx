@@ -25,17 +25,21 @@ import {
   Lock,
 } from "lucide-react";
 import { UserProfile } from "@/lib/types";
-import { CreateInspectorForm } from "./CreateInspectorForm";
 import { SchoolsManager } from "./SchoolsManager";
-import { WilayaStats } from "./WilayaStats";
+import { OverviewTab } from "./OverviewTab";
+import { InspectorsTab } from "./InspectorsTab";
+import { AuditLogTab } from "./AuditLogTab";
+import { DISTRICTS_INFO } from "./districts";
 
-const DISTRICTS_INFO: Record<number, string> = {
-  1: "المقاطعة 1 — الوادي 1",
-  2: "المقاطعة 2 — الوادي 2",
-  3: "المقاطعة 3 — قمار",
-  4: "المقاطعة 4 — الرقيبة",
-  5: "المقاطعة 5 — الدبيلة والمقرن",
-};
+type AdminTab = "overview" | "accounts" | "inspectors" | "schools" | "circular" | "moderation" | "log";
+
+const TABS: [AdminTab, string][] = [
+  ["overview", "نظرة عامة"],
+  ["accounts", "الحسابات"],
+  ["inspectors", "المفتشون والمقاطعات"],
+  ["schools", "المتوسطات"],
+  ["log", "سجل العمليات"],
+];
 
 type ToastState = { type: "success" | "error"; text: string } | null;
 
@@ -49,7 +53,7 @@ export default function SuperAdminPage() {
   const [districtFilter, setDistrictFilter] = useState<number | "all">("all");
   const [toast, setToast] = useState<ToastState>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"accounts" | "schools" | "stats">("accounts");
+  const [tab, setTab] = useState<AdminTab>("overview");
   const [confirmAction, setConfirmAction] = useState<{
     userId: string;
     userName: string;
@@ -323,8 +327,40 @@ export default function SuperAdminPage() {
         </div>
       )}
 
+      {/* ─── شريط الحاسوب العلوي ─── */}
+      <header className="hidden lg:block bg-gradient-to-l from-slate-900 to-indigo-950 text-white">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-500/25 border border-indigo-400/30 flex items-center justify-center">
+              <Crown className="w-5 h-5 text-indigo-300" />
+            </div>
+            <div>
+              <p className="font-black text-sm">لوحة المشرف العام — ولاية الوادي</p>
+              <p className="text-[11px] text-indigo-300">
+                {stats.teachers} أستاذ • {stats.inspectors} مفتش • {stats.total} حساب
+              </p>
+            </div>
+          </div>
+          <nav className="flex items-center gap-2 text-xs text-indigo-200">
+            <Link href="/" className="px-3 py-1.5 rounded-lg hover:bg-white/10 transition">الصفحة الرئيسية</Link>
+            <Link href="/forum" className="px-3 py-1.5 rounded-lg hover:bg-white/10 transition">💬 الملتقى</Link>
+            <Link href="/inspector" className="px-3 py-1.5 rounded-lg hover:bg-white/10 transition">🛡️ لوحة المقاطعات</Link>
+            <Link href="/settings" className="px-3 py-1.5 rounded-lg hover:bg-white/10 transition">⚙️ حسابي</Link>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                router.push("/login");
+              }}
+              className="px-3 py-1.5 rounded-lg text-red-300 hover:bg-white/10 transition flex items-center gap-1"
+            >
+              <LogOut className="w-3.5 h-3.5" /> خروج
+            </button>
+          </nav>
+        </div>
+      </header>
+
       {/* ─── الترويسة ─── */}
-      <div className="bg-gradient-to-b from-slate-900 via-indigo-950 to-indigo-900 text-white px-4 pt-8 pb-14 rounded-b-[2.5rem] shadow-2xl">
+      <div className="lg:hidden bg-gradient-to-b from-slate-900 via-indigo-950 to-indigo-900 text-white px-4 pt-8 pb-14 rounded-b-[2.5rem] shadow-2xl">
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex items-center justify-between">
             <Link
@@ -387,28 +423,33 @@ export default function SuperAdminPage() {
       </div>
 
       {/* ─── المحتوى الرئيسي ─── */}
-      <div className="max-w-4xl mx-auto px-4 -mt-6 space-y-4 relative z-10">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow p-1 grid grid-cols-3 gap-1">
-          {(
-            [
-              ["accounts", "الحسابات"],
-              ["schools", "المتوسطات"],
-              ["stats", "إحصائيات الولاية"],
-            ] as const
-          ).map(([id, label]) => (
+      <div className="max-w-4xl lg:max-w-7xl mx-auto px-4 lg:px-6 -mt-6 lg:mt-0 space-y-4 relative z-10">
+        {/* الهاتف: شريط تبويبات يمرَّر أفقياً • الحاسوب: تبويبات بخط سفلي */}
+        <div
+          role="tablist"
+          className="bg-white rounded-2xl border border-slate-100 shadow p-1 flex gap-1 overflow-x-auto lg:rounded-none lg:shadow-none lg:border-0 lg:border-b lg:border-slate-200 lg:bg-transparent lg:p-0 lg:gap-6 lg:pt-2"
+        >
+          {TABS.map(([id, label]) => (
             <button
               key={id}
+              role="tab"
+              aria-selected={tab === id}
               onClick={() => setTab(id)}
-              className={`py-2 rounded-xl text-xs font-bold ${tab === id ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+              className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold lg:rounded-none lg:px-0 lg:py-3 lg:text-sm lg:border-b-2 ${
+                tab === id
+                  ? "bg-indigo-600 text-white lg:bg-transparent lg:text-indigo-700 lg:border-indigo-600"
+                  : "text-slate-600 hover:bg-slate-50 lg:hover:bg-transparent lg:hover:text-slate-900 lg:border-transparent"
+              }`}
             >
               {label}
             </button>
           ))}
         </div>
 
+        {tab === "overview" && <OverviewTab profiles={profiles} onOpenLog={() => setTab("log")} />}
+        {tab === "inspectors" && <InspectorsTab profiles={profiles} onChanged={loadProfiles} />}
         {tab === "schools" && <SchoolsManager />}
-        {tab === "stats" && <WilayaStats profiles={profiles} />}
-        {tab === "accounts" && <CreateInspectorForm onCreated={loadProfiles} />}
+        {tab === "log" && <AuditLogTab profiles={profiles} />}
 
         {tab === "accounts" && (<>
         {/* شريط البحث والفلترة */}
@@ -474,8 +515,61 @@ export default function SuperAdminPage() {
           </div>
         </div>
 
+        {/* الحاسوب: جدول الحسابات */}
+        {filteredProfiles.length > 0 && (
+          <div className="hidden lg:block bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 text-slate-500 text-right">
+                <tr>
+                  <th className="px-4 py-2.5 font-bold">الاسم</th>
+                  <th className="px-2 py-2.5 font-bold">الكود</th>
+                  <th className="px-2 py-2.5 font-bold">الدور</th>
+                  <th className="px-2 py-2.5 font-bold">المقاطعة</th>
+                  <th className="px-2 py-2.5 font-bold">المتوسطة</th>
+                  <th className="px-2 py-2.5 font-bold">الحالة</th>
+                  <th className="px-4 py-2.5 font-bold">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredProfiles.map((profile) => (
+                  <tr key={profile.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-2.5 font-bold text-slate-900">
+                      {profile.slug ? (
+                        <Link href={`/t/${profile.slug}`} target="_blank" className="hover:text-indigo-700">
+                          {profile.full_name || "—"}
+                        </Link>
+                      ) : (
+                        profile.full_name || "—"
+                      )}
+                    </td>
+                    <td className="px-2 py-2.5 font-mono text-emerald-700">{profile.teacher_code || "—"}</td>
+                    <td className="px-2 py-2.5">{ROLE_LABEL[profile.role]}</td>
+                    <td className="px-2 py-2.5">{profile.district_id ? DISTRICTS_INFO[profile.district_id] : "—"}</td>
+                    <td className="px-2 py-2.5 text-slate-500 max-w-48 truncate">{profile.school_custom_name || "—"}</td>
+                    <td className="px-2 py-2.5">
+                      {profile.is_verified ? <span className="text-emerald-600">مفعّل</span> : <span className="text-rose-600 font-bold">معلق</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-1.5">
+                        <ProfileActions
+                          profile={profile}
+                          busyId={busyId}
+                          onUpgrade={(userId, userName) => setConfirmAction({ userId, userName, action: "upgrade_inspector", districtId: 1 })}
+                          onDowngrade={(userId, userName) => setConfirmAction({ userId, userName, action: "downgrade_teacher" })}
+                          onToggleVerified={toggleVerified}
+                          onDelete={(userId, userName) => setConfirmAction({ userId, userName, action: "delete_user" })}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {/* قائمة الحسابات */}
-        <div className="space-y-3">
+        <div className={`space-y-3 ${filteredProfiles.length > 0 ? "lg:hidden" : ""}`}>
           {filteredProfiles.length === 0 ? (
             <div className="bg-white rounded-3xl border border-slate-100 shadow p-12 text-center text-slate-400">
               <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -530,7 +624,6 @@ function ProfileCard({
   onToggleVerified: (profile: UserProfile) => void;
   onDelete: (id: string, name: string) => void;
 }) {
-  const isBusy = busyId === profile.id;
   const roleBadge =
     profile.role === "admin"
       ? { label: "مشرف عام", color: "bg-amber-100 text-amber-700" }
@@ -608,6 +701,47 @@ function ProfileCard({
 
       {/* أزرار الإجراءات */}
       <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-50">
+        <ProfileActions
+          profile={profile}
+          busyId={busyId}
+          onUpgrade={onUpgrade}
+          onDowngrade={onDowngrade}
+          onToggleVerified={onToggleVerified}
+          onDelete={onDelete}
+        />
+
+        {/* معلومات إضافية */}
+        {profile.levels_taught && profile.levels_taught.length > 0 && (
+          <span className="px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 text-xs font-bold">
+            📚 السنوات: {profile.levels_taught.join(", ")}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const ROLE_LABEL: Record<string, string> = { admin: "مشرف عام", inspector: "مفتش", teacher: "أستاذ" };
+
+/* ─── أزرار إجراءات حساب (في البطاقة والجدول) ─── */
+function ProfileActions({
+  profile,
+  busyId,
+  onUpgrade,
+  onDowngrade,
+  onToggleVerified,
+  onDelete,
+}: {
+  profile: UserProfile;
+  busyId: string | null;
+  onUpgrade: (id: string, name: string) => void;
+  onDowngrade: (id: string, name: string) => void;
+  onToggleVerified: (profile: UserProfile) => void;
+  onDelete: (id: string, name: string) => void;
+}) {
+  const isBusy = busyId === profile.id;
+  return (
+    <>
         {/* ترقية إلى مفتش */}
         {profile.role === "teacher" && (
           <button
@@ -670,14 +804,6 @@ function ProfileCard({
             حذف
           </button>
         )}
-
-        {/* معلومات إضافية */}
-        {profile.levels_taught && profile.levels_taught.length > 0 && (
-          <span className="px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 text-xs font-bold">
-            📚 السنوات: {profile.levels_taught.join(", ")}
-          </span>
-        )}
-      </div>
-    </div>
+    </>
   );
 }
