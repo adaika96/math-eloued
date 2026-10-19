@@ -5,7 +5,7 @@ import { ArrowRight, Loader2 } from "lucide-react";
 
 export function BackHeader({ href, title, subtitle }: { href: string; title: string; subtitle?: string }) {
   return (
-    <header className="sticky top-0 z-10 -mx-4 px-4 py-3 bg-[#f6f8fb]/90 backdrop-blur flex items-center gap-3">
+    <header className="sticky top-0 z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 py-3 bg-[#f6f8fb]/90 backdrop-blur flex items-center gap-3">
       <Link
         href={href}
         className="w-10 h-10 shrink-0 rounded-xl bg-white border border-slate-200 flex items-center justify-center active:scale-95 transition"

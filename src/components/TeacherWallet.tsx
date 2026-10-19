@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { BookOpen, Star, X, Plus, ExternalLink, Heart } from "lucide-react";
 import Link from "next/link";
 
-interface SavedTeacher {
+export interface SavedTeacher {
   slug: string;
   name: string;
   code: string;
@@ -15,7 +15,7 @@ interface SavedTeacher {
 
 const STORAGE_KEY = "math_eloued_wallet";
 
-function loadWallet(): SavedTeacher[] {
+export function loadWallet(): SavedTeacher[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -85,6 +85,13 @@ export default function TeacherWallet() {
           </p>
         </div>
       </div>
+
+      <Link
+        href="/my-children"
+        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition"
+      >
+        <BookOpen className="w-4 h-4" /> كل مستجدات أبنائي في صفحة واحدة
+      </Link>
 
       {/* بطاقات المعلمين المحفوظين */}
       <div className="space-y-2">
