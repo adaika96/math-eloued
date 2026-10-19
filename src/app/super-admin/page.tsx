@@ -30,6 +30,7 @@ import { OverviewTab } from "./OverviewTab";
 import { InspectorsTab } from "./InspectorsTab";
 import { AuditLogTab } from "./AuditLogTab";
 import { WilayaCircularTab } from "./WilayaCircularTab";
+import { ModerationTab } from "./ModerationTab";
 import { DISTRICTS_INFO } from "./districts";
 
 type AdminTab = "overview" | "accounts" | "inspectors" | "schools" | "circular" | "moderation" | "log";
@@ -40,6 +41,7 @@ const TABS: [AdminTab, string][] = [
   ["inspectors", "المفتشون والمقاطعات"],
   ["schools", "المتوسطات"],
   ["circular", "منشور ولائي"],
+  ["moderation", "مراقبة المحتوى"],
   ["log", "سجل العمليات"],
 ];
 
@@ -455,6 +457,15 @@ export default function SuperAdminPage() {
         {tab === "schools" && <SchoolsManager />}
         {tab === "circular" && (
           <WilayaCircularTab admin={profiles.find((p) => p.id === adminId) ?? null} profiles={profiles} />
+        )}
+        {tab === "moderation" && (
+          <ModerationTab
+            profiles={profiles}
+            onSuspend={(teacherId) => {
+              const user = profiles.find((p) => p.id === teacherId);
+              if (user?.is_verified && confirm(`تعليق حساب ${user.full_name || ""}؟ تُحجب صفحته العامة عن الأولياء.`)) toggleVerified(user);
+            }}
+          />
         )}
         {tab === "log" && <AuditLogTab profiles={profiles} />}
 

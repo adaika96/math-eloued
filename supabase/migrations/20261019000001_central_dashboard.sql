@@ -158,6 +158,36 @@ CREATE TRIGGER trg_audit_wilaya_circular
   AFTER INSERT OR DELETE ON public.inspector_circulars
   FOR EACH ROW EXECUTE FUNCTION public.audit_wilaya_circular();
 
+-- حذف المشرف لمشاركات غيره في الملتقى (مراقبة المحتوى)
+CREATE OR REPLACE FUNCTION public.audit_forum_delete()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  IF NOT public.is_admin() OR OLD.author_id = auth.uid() THEN
+    RETURN NULL;
+  END IF;
+  IF TG_TABLE_NAME = 'forum_topics' THEN
+    PERFORM public.log_admin_action('forum_topic_deleted', 'forum_topic', OLD.id::text,
+      jsonb_build_object('title', OLD.title, 'author_name', OLD.author_name));
+  -- الرد المحذوف تبعاً لحذف موضوعه (الموضوع لم يعد موجوداً) سُجّل مع الموضوع
+  ELSIF EXISTS (SELECT 1 FROM public.forum_topics t WHERE t.id = OLD.topic_id) THEN
+    PERFORM public.log_admin_action('forum_reply_deleted', 'forum_reply', OLD.id::text,
+      jsonb_build_object('author_name', OLD.author_name, 'excerpt', left(OLD.body, 120)));
+  END IF;
+  RETURN NULL;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_audit_forum_topic_delete ON public.forum_topics;
+CREATE TRIGGER trg_audit_forum_topic_delete
+  AFTER DELETE ON public.forum_topics
+  FOR EACH ROW EXECUTE FUNCTION public.audit_forum_delete();
+
+DROP TRIGGER IF EXISTS trg_audit_forum_reply_delete ON public.forum_replies;
+CREATE TRIGGER trg_audit_forum_reply_delete
+  AFTER DELETE ON public.forum_replies
+  FOR EACH ROW EXECUTE FUNCTION public.audit_forum_delete();
+
 -- --------------------------------------------------------------------
 -- 3) إحصائيات الولاية محسوبة في قاعدة البيانات (للمشرف وحده)
 -- --------------------------------------------------------------------

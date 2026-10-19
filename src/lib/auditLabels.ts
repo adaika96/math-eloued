@@ -16,6 +16,8 @@ const LABELS: Record<string, (d: Details) => string> = {
   wilaya_circular_deleted: (d) => withTarget("حذف منشور ولائي", d.title),
   inspector_created: () => "إنشاء حساب مفتش",
   user_deleted: () => "حذف حساب نهائياً",
+  forum_topic_deleted: (d) => withTarget("حذف موضوع من الملتقى", d.title),
+  forum_reply_deleted: () => "حذف رد من الملتقى",
 };
 
 export const AUDIT_ACTIONS = Object.keys(LABELS);

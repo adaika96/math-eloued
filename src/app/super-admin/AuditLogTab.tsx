@@ -24,7 +24,7 @@ export const fmtDateTime = (iso: string) =>
 // اسم الهدف: من التفاصيل المحفوظة وقت العملية، وإلا من قائمة الحسابات
 export function targetName(row: AuditRow, names: Map<string, string>) {
   const d = row.details || {};
-  return String(d.full_name || d.name || d.title || (row.target_id && names.get(row.target_id)) || "—");
+  return String(d.full_name || d.name || d.title || d.author_name || (row.target_id && names.get(row.target_id)) || "—");
 }
 
 export function AuditLogTab({ profiles }: { profiles: UserProfile[] }) {

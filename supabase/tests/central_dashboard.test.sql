@@ -164,6 +164,42 @@ BEGIN
   END IF;
 END $$;
 
+-- ---------- مراقبة الملتقى: حذف المشرف يُسجَّل، وحذف صاحب المشاركة لا يُسجَّل ----------
+RESET ROLE;
+INSERT INTO public.forum_topics (id, author_id, title, body)
+VALUES ('d1000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000005', 'cd forum topic', 'cd topic body');
+INSERT INTO public.forum_replies (id, topic_id, author_id, body)
+VALUES ('d2000000-0000-4000-8000-000000000002', 'd1000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000005', 'cd reply body');
+INSERT INTO public.forum_replies (id, topic_id, author_id, body)
+VALUES ('d4000000-0000-4000-8000-000000000004', 'd1000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000005', 'cd cascaded reply');
+INSERT INTO public.forum_topics (id, author_id, title, body)
+VALUES ('d3000000-0000-4000-8000-000000000003', 'c5000000-0000-4000-8000-000000000005', 'cd own topic', 'cd own body');
+SET LOCAL ROLE authenticated;
+
+SELECT set_config('request.jwt.claims', '{"sub":"c1000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+DELETE FROM public.forum_replies WHERE id = 'd2000000-0000-4000-8000-000000000002';
+DELETE FROM public.forum_topics WHERE id = 'd1000000-0000-4000-8000-000000000001';
+
+SELECT set_config('request.jwt.claims', '{"sub":"c5000000-0000-4000-8000-000000000005","role":"authenticated"}', true);
+DELETE FROM public.forum_topics WHERE id = 'd3000000-0000-4000-8000-000000000003';
+
+SELECT set_config('request.jwt.claims', '{"sub":"c1000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+DO $$ -- forum_moderation_logged
+BEGIN
+  IF (SELECT count(*) FROM public.admin_audit_log WHERE action = 'forum_reply_deleted' AND target_id = 'd2000000-0000-4000-8000-000000000002') <> 1 THEN
+    RAISE EXCEPTION 'forum_moderation_logged failed: reply';
+  END IF;
+  IF (SELECT count(*) FROM public.admin_audit_log WHERE action = 'forum_topic_deleted' AND details->>'title' = 'cd forum topic') <> 1 THEN
+    RAISE EXCEPTION 'forum_moderation_logged failed: topic';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.admin_audit_log WHERE target_id = 'd3000000-0000-4000-8000-000000000003') THEN
+    RAISE EXCEPTION 'forum_moderation_logged failed: author deleting own topic was logged';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.admin_audit_log WHERE target_id = 'd4000000-0000-4000-8000-000000000004') THEN
+    RAISE EXCEPTION 'forum_moderation_logged failed: cascaded reply was logged separately';
+  END IF;
+END $$;
+
 -- ---------- الزائر المجهول ----------
 RESET ROLE;
 SET LOCAL ROLE anon;
