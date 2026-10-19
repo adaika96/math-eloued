@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLessonsData, saveLessonsData } from "@/lib/storage";
+import { getLessonsData, removeStudent, saveLessonsData } from "@/lib/storage";
 import { requireTeacher } from "@/lib/auth";
 import { StudentEvaluation, EvaluationRating } from "@/lib/types";
 
@@ -263,9 +263,10 @@ export async function DELETE(req: NextRequest) {
   }
 
   if (id) {
-    const idx = data.evaluations.findIndex((e) => e.id === id);
-    if (idx !== -1) {
-      data.evaluations.splice(idx, 1);
+    const target = data.evaluations.find((e) => e.id === id);
+    if (target) {
+      // حذف التلميذ من التقويم وقائمة القسم معاً، وإلا أعادته المزامنة بتقييم افتراضي
+      removeStudent(data, target.studentName, target.className);
       await saveLessonsData(ctx, data);
       return NextResponse.json({ success: true, deletedId: id });
     }

@@ -101,14 +101,45 @@ function pick(data: LessonsData, keys: readonly string[]) {
   return out;
 }
 
-async function readRow(ctx: TeacherContext, table: "teacher_public_data" | "teacher_private_data") {
+type Table = "teacher_public_data" | "teacher_private_data";
+
+async function readRow(ctx: TeacherContext, table: Table) {
   const { data, error } = await ctx.supabase
     .from(table)
-    .select("data")
+    .select("data, updated_at")
     .eq("teacher_id", ctx.teacherId)
     .maybeSingle();
   if (error) throw new Error(`${table}: ${error.message}`);
-  return data ? (data.data as Record<string, unknown>) : null;
+  return data ? { data: data.data as Record<string, unknown>, updatedAt: data.updated_at as string } : null;
+}
+
+// ما قرأناه من كل صف: نسخته (updated_at) ومحتواه، لنكتب فقط ما تغير ونكشف الكتابة المتزامنة
+interface RowBase {
+  updatedAt: string | null;
+  json: string;
+}
+const readBases = new WeakMap<LessonsData, Record<Table, RowBase>>();
+
+export class ConflictError extends Error {
+  constructor() {
+    super("تم تعديل بياناتك من جهاز أو نافذة أخرى في نفس اللحظة، يرجى إعادة المحاولة");
+  }
+}
+
+// حذف تلميذ من كل القوائم معاً (وإلا أعادته المزامنة من القائمة الأخرى)
+export function removeStudent(data: LessonsData, studentName: string, className: string) {
+  const name = studentName.trim().toLowerCase();
+  const cls = className.replace(/\s+/g, "");
+  const isTarget = (s: { studentName?: string; className?: string }) =>
+    (s.studentName || "").trim().toLowerCase() === name && (s.className || "").replace(/\s+/g, "") === cls;
+  data.studentRoster = (data.studentRoster || []).filter((r) => !isTarget(r));
+  data.evaluations = (data.evaluations || []).filter((e) => !isTarget(e));
+  for (const session of data.inspectionSessions || []) {
+    if ((session.className || "").replace(/\s+/g, "") !== cls) continue;
+    for (const key of Object.keys(session.records || {})) {
+      if (key.trim().toLowerCase() === name) delete session.records[key];
+    }
+  }
 }
 
 // ----------------- ترحيل بيانات الموقع القديم (lessons-db.json) لمرة واحدة -----------------
@@ -153,76 +184,78 @@ export async function getLessonsData(ctx: TeacherContext): Promise<LessonsData> 
   if (ctx.mode === "public") {
     return readPublicTeacherData(ctx.supabase, ctx.teacherId);
   }
-  const publicData = await readRow(ctx, "teacher_public_data");
-
-  const privateData = await readRow(ctx, "teacher_private_data");
-  if (!publicData && !privateData && isLegacyOwner(ctx)) {
+  const publicRow = await readRow(ctx, "teacher_public_data");
+  const privateRow = await readRow(ctx, "teacher_private_data");
+  if (!publicRow && !privateRow && isLegacyOwner(ctx)) {
     const legacy = await loadLegacyData();
     if (legacy) {
       synchronizeStudents(legacy);
       await writeRows(ctx, legacy);
-      return legacy;
+      return getLessonsData(ctx);
     }
   }
-  return synchronizeStudents(normalizeData({ ...(publicData ?? {}), ...(privateData ?? {}) }));
+  const data = synchronizeStudents(normalizeData({ ...(publicRow?.data ?? {}), ...(privateRow?.data ?? {}) }));
+  const baseOf = (row: typeof publicRow, keys: readonly string[]): RowBase => ({
+    updatedAt: row?.updatedAt ?? null,
+    json: JSON.stringify(pick(normalizeData(row?.data ?? {}), keys)),
+  });
+  readBases.set(data, {
+    teacher_public_data: baseOf(publicRow, PUBLIC_KEYS),
+    teacher_private_data: baseOf(privateRow, PRIVATE_KEYS),
+  });
+  return data;
+}
+
+// يكتب الصف فقط إن تغير، وبشرط ألا يكون أحد قد كتبه بعد قراءتنا (وإلا ConflictError)
+async function writeRow(ctx: TeacherContext, table: Table, value: Record<string, unknown>, base?: RowBase) {
+  if (base && JSON.stringify(value) === base.json) return;
+  const row = { teacher_id: ctx.teacherId, data: value, updated_at: new Date().toISOString() };
+
+  if (base?.updatedAt) {
+    const { data, error } = await ctx.supabase
+      .from(table)
+      .update(row)
+      .eq("teacher_id", ctx.teacherId)
+      .eq("updated_at", base.updatedAt)
+      .select("teacher_id");
+    if (error) throw new Error(`${table}: ${error.message}`);
+    if (!data || data.length === 0) throw new ConflictError();
+    return;
+  }
+
+  const { error } = await ctx.supabase.from(table).insert(row);
+  if (error?.code === "23505") throw new ConflictError(); // صف أنشئ بعد قراءتنا
+  if (error) throw new Error(`${table}: ${error.message}`);
 }
 
 async function writeRows(ctx: TeacherContext, data: LessonsData) {
-  const now = new Date().toISOString();
-  const [pub, priv] = await Promise.all([
-    ctx.supabase
-      .from("teacher_public_data")
-      .upsert({ teacher_id: ctx.teacherId, data: pick(data, PUBLIC_KEYS), updated_at: now }),
-    ctx.supabase
-      .from("teacher_private_data")
-      .upsert({ teacher_id: ctx.teacherId, data: pick(data, PRIVATE_KEYS), updated_at: now }),
-  ]);
-  if (pub.error) throw new Error(`teacher_public_data: ${pub.error.message}`);
-  if (priv.error) throw new Error(`teacher_private_data: ${priv.error.message}`);
+  const bases = readBases.get(data);
+  await writeRow(ctx, "teacher_public_data", pick(data, PUBLIC_KEYS), bases?.teacher_public_data);
+  await writeRow(ctx, "teacher_private_data", pick(data, PRIVATE_KEYS), bases?.teacher_private_data);
 }
 
 // ----------------- حفظ بيانات الأستاذ -----------------
-async function executeSave(ctx: TeacherContext, data: LessonsData): Promise<void> {
-  // دمج وقائي صارم لمنع فقدان الدروس أو التلاميذ عند حدوث أي خطأ في الكاش
-  try {
-    const existing = await getLessonsData(ctx);
-    if ((!data.lessons || data.lessons.length === 0) && existing.lessons && existing.lessons.length > 0) {
-      data.lessons = existing.lessons;
-    }
-    if ((!data.studentRoster || data.studentRoster.length === 0) && existing.studentRoster && existing.studentRoster.length > 0) {
-      data.studentRoster = existing.studentRoster;
-    }
-    if ((!data.evaluations || data.evaluations.length === 0) && existing.evaluations && existing.evaluations.length > 0) {
-      data.evaluations = existing.evaluations;
-    }
-    if ((!data.inspectionSessions || data.inspectionSessions.length === 0) && existing.inspectionSessions && existing.inspectionSessions.length > 0) {
-      data.inspectionSessions = existing.inspectionSessions;
-    }
-    if (data.announcements === undefined && existing.announcements) {
-      data.announcements = existing.announcements;
-    }
-    if (data.anonymousMessages === undefined && existing.anonymousMessages) {
-      data.anonymousMessages = existing.anonymousMessages;
-    }
-  } catch (mergeErr) {
-    console.warn("Could not merge existing data before save:", mergeErr);
+// data يجب أن يأتي من getLessonsData لنفس الطلب: يرفض الحفظ إن تغيرت البيانات بعد قراءتها
+export async function saveLessonsData(ctx: TeacherContext, data: LessonsData): Promise<void> {
+  if (ctx.mode !== "owner") {
+    throw new Error("غير مصرح بتعديل بيانات أستاذ آخر");
   }
-
   synchronizeStudents(data);
   await writeRows(ctx, data);
 }
 
-// طابور كتابة لكل أستاذ لمنع تداخل الحفظ المتزامن
-const writeQueues = new Map<string, Promise<unknown>>();
-
-export function saveLessonsData(ctx: TeacherContext, data: LessonsData): Promise<void> {
-  if (ctx.mode !== "owner") {
-    return Promise.reject(new Error("غير مصرح بتعديل بيانات أستاذ آخر"));
+// قراءة ثم تعديل ثم حفظ، مع إعادة المحاولة إن كتب طلب آخر في نفس اللحظة
+export async function updateLessonsData<T>(ctx: TeacherContext, mutate: (data: LessonsData) => T): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    const data = await getLessonsData(ctx);
+    const result = mutate(data);
+    try {
+      await saveLessonsData(ctx, data);
+      return result;
+    } catch (err) {
+      if (!(err instanceof ConflictError) || attempt >= 3) throw err;
+    }
   }
-  const prev = writeQueues.get(ctx.teacherId) ?? Promise.resolve();
-  const next = prev.then(() => executeSave(ctx, data));
-  writeQueues.set(ctx.teacherId, next.catch(() => {}));
-  return next;
 }
 
 // ----------------- رفع صورة / ملف إلى مخزن Supabase العام -----------------

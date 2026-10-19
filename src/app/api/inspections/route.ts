@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLessonsData, saveLessonsData } from "@/lib/storage";
+import { getLessonsData, removeStudent, saveLessonsData } from "@/lib/storage";
 import { requireTeacher } from "@/lib/auth";
 import { InspectionSession, InspectionRecord, StudentRosterItem } from "@/lib/types";
 
@@ -387,19 +387,8 @@ export async function DELETE(req: NextRequest) {
 
   // حذف تلميذ من القائمة
   if (studentName && className) {
-    data.studentRoster = data.studentRoster.filter(
-      (r) =>
-        !(
-          r.studentName.toLowerCase() === studentName.toLowerCase() &&
-          r.className.replace(/\s+/g, "") === className.replace(/\s+/g, "")
-        )
-    );
-    // حذفه من كافة جلسات ذلك القسم
-    for (const session of data.inspectionSessions) {
-      if (session.className.replace(/\s+/g, "") === className.replace(/\s+/g, "")) {
-        delete session.records[studentName];
-      }
-    }
+    // حذفه من القائمة والتقويم وكافة جلسات ذلك القسم
+    removeStudent(data, studentName, className);
     await saveLessonsData(ctx, data);
     return NextResponse.json({ success: true, message: `تم حذف التلميذ ${studentName}` });
   }

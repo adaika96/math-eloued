@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getLessonsData, saveLessonsData, uploadImageFile } from "@/lib/storage";
+import { getLessonsData, updateLessonsData, uploadImageFile } from "@/lib/storage";
 import { requireTeacher } from "@/lib/auth";
 import { rateLimit } from "@/lib/rateLimit";
 
@@ -89,20 +89,24 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (isHomework) {
-      if (!Array.isArray(lesson.homeworkImages)) lesson.homeworkImages = [];
-      lesson.homeworkImages.push(...newImages);
-    } else {
-      if (!Array.isArray(lesson.images)) lesson.images = [];
-      lesson.images.push(...newImages);
-    }
-
-    await saveLessonsData(ctx, data);
+    // الرفع يستغرق ثواني: نعيد قراءة البيانات الآن ونحفظ مع إعادة المحاولة كي لا نمحو تعديلاً حدث أثناءه
+    const savedLesson = await updateLessonsData(ctx, (fresh) => {
+      const target = fresh.lessons.find((l) => l.id === lessonId);
+      if (!target) throw new Error("الدرس غير موجود");
+      if (isHomework) {
+        if (!Array.isArray(target.homeworkImages)) target.homeworkImages = [];
+        target.homeworkImages.push(...newImages);
+      } else {
+        if (!Array.isArray(target.images)) target.images = [];
+        target.images.push(...newImages);
+      }
+      return target;
+    });
 
     return NextResponse.json({
       images: newImages,
       image: newImages[0],
-      lesson,
+      lesson: savedLesson,
       isHomework,
       count: newImages.length,
     });

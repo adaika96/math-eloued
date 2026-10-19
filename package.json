@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "tsx --test src/lib/storage.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -26,6 +27,7 @@
     "@types/react-dom": "^19",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }
