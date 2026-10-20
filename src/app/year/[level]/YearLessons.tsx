@@ -240,7 +240,7 @@ export function YearLessons({ level }: { level: 1 | 2 | 3 | 4 }) {
                     </div>
 
                     {/* 3. الموارد المعرفية التابعة لهذا المقطع */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-2">
                       {sec.items.map((l) => {
                         const count = l.images?.length || 0;
                         return (
@@ -324,7 +324,7 @@ export function YearLessons({ level }: { level: 1 | 2 | 3 | 4 }) {
           {directedWorkItems.length === 0 ? (
             <Empty text="لم تُضف حصص أعمال موجهة بعد" />
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-2.5">
               {directedWorkItems.map((l) => {
                 const count = l.images?.length || 0;
                 return (
@@ -393,7 +393,7 @@ export function YearLessons({ level }: { level: 1 | 2 | 3 | 4 }) {
           {worksheetsItems.length === 0 ? (
             <Empty text="لم تُضف سلاسل تمارين بعد لهذا المستوى" />
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-2.5">
               {worksheetsItems.map((l) => {
                 const count = l.images?.length || 0;
                 return (
@@ -465,7 +465,7 @@ export function YearLessons({ level }: { level: 1 | 2 | 3 | 4 }) {
           {summariesItems.length === 0 ? (
             <Empty text="لم تُضف ملخصات أو مطويات بعد لهذا المستوى" />
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-2.5">
               {summariesItems.map((l) => {
                 const count = l.images?.length || 0;
                 return (

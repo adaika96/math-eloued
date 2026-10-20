@@ -293,8 +293,8 @@ export function LessonView({ id }: { id: string }) {
               </div>
             )
           ) : (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-600 px-1">
+            <div className="space-y-5 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5 lg:items-start">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-600 px-1 lg:col-span-2">
                 <span>
                   {viewMode === "homework"
                     ? `صور حل الواجب المنزلي (${images.length}):`
